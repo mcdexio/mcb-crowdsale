@@ -8,11 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "./libraries/SafeMathExt.sol";
 
-// 1. 每质押（1MCB+2.5USDC）可以申购0.25MCB
-// 2. 申购期结束时，如果申购总量小于等于10万MCB，则依照申购数分配额度。如果申购总量超过10万MCB，则按申购总数成比例减少每个人的申购量：
-//   个人分配数 = MIN(10万 / 总申购量, 1) * 个人申购数
-// 3. 申购期结束后，MCB和多余的USDC将被质押2周后解锁； 申购使用的USDC将被发送到基金会多签
-// 4. admin 接口
+import "hardhat/console.sol";
 
 contract MCBCrowdsale is Ownable {
     using Math for uint256;
@@ -22,7 +18,8 @@ contract MCBCrowdsale is Ownable {
 
     address public constant MCB_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000;
     address public constant USDC_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000;
-    address public constant MCDEX_MULTI_SIGN_ADDRESS = 0x0000000000000000000000000000000000000000;
+    address public constant MCDEX_MULTI_SIGN_WALLET_ADDRESS =
+        0x0000000000000000000000000000000000000000;
 
     uint256 public constant MAX_SUPPLY = 100000 * 1e18;
     uint256 public constant USDC_RATE = 10 * 1e6;
@@ -64,12 +61,12 @@ contract MCBCrowdsale is Ownable {
 
     function isPurchaseable() public view returns (bool) {
         uint256 currentTimestamp = _blockTimestamp();
-        return currentTimestamp >= beginTime && currentTimestamp <= endTime;
+        return currentTimestamp >= beginTime && currentTimestamp < endTime;
     }
 
     function isSettleable() public view returns (bool) {
         uint256 currentTimestamp = _blockTimestamp();
-        return currentTimestamp > unlockTime;
+        return currentTimestamp >= unlockTime;
     }
 
     function isAccountSettled(address account) public view returns (bool) {
@@ -81,11 +78,11 @@ contract MCBCrowdsale is Ownable {
     }
 
     function totalSoldQuota() public view returns (uint256) {
-        return _totalExpectedQuota.max(MAX_SUPPLY);
+        return _totalExpectedQuota.min(MAX_SUPPLY);
     }
 
     function quotaRate() public view returns (uint256) {
-        return _totalExpectedQuota <= MAX_SUPPLY ? 1e18 : _totalExpectedQuota / MAX_SUPPLY;
+        return _totalExpectedQuota <= MAX_SUPPLY ? 1e18 : _totalExpectedQuota.wdivFloor(MAX_SUPPLY);
     }
 
     function quotaOf(address account) public view returns (uint256) {
@@ -105,8 +102,8 @@ contract MCBCrowdsale is Ownable {
         uint256 mcbAmount = expectedQuota.wmul(MCB_RATE);
         uint256 usdcAmount = expectedQuota.wmul(USDC_RATE);
         // transfer
-        IERC20(MCB_TOKEN_ADDRESS).safeTransferFrom(msg.sender, address(this), mcbAmount);
-        IERC20(USDC_TOKEN_ADDRESS).safeTransferFrom(msg.sender, address(this), usdcAmount);
+        IERC20(_mcbToken()).safeTransferFrom(msg.sender, address(this), mcbAmount);
+        IERC20(_usdcToken()).safeTransferFrom(msg.sender, address(this), usdcAmount);
 
         _expectedQuotas[msg.sender] = _expectedQuotas[msg.sender].add(expectedQuota);
         _totalExpectedQuota = _totalExpectedQuota.add(expectedQuota);
@@ -123,15 +120,17 @@ contract MCBCrowdsale is Ownable {
         uint256 mcbAmount = _expectedQuotas[account].wmul(MCB_RATE);
         uint256 usdcAmount = _expectedQuotas[account].wmul(USDC_RATE);
         uint256 usdcCostAmount = usdcAmount.wdivCeil(quotaRate());
+        uint256 usdcRefundAmount = 0;
         // usdc refund
         if (usdcAmount > usdcCostAmount) {
-            IERC20(USDC_TOKEN_ADDRESS).safeTransfer(account, usdcAmount.sub(usdcCostAmount));
+            usdcRefundAmount = usdcAmount.sub(usdcCostAmount);
+            IERC20(_usdcToken()).safeTransfer(account, usdcRefundAmount);
         }
 
-        IERC20(MCB_TOKEN_ADDRESS).safeTransfer(account, mcbAmount);
+        IERC20(_mcbToken()).safeTransfer(account, mcbAmount);
         _settlements[account] = true;
 
-        emit Settle(account, quotaAmount, usdcAmount.sub(usdcCostAmount));
+        emit Settle(account, quotaAmount, usdcRefundAmount);
     }
 
     function emergencySettle(address account) public {
@@ -140,8 +139,8 @@ contract MCBCrowdsale is Ownable {
         uint256 usdcAmount = _expectedQuotas[account].wmul(USDC_RATE);
 
         _expectedQuotas[account] = 0;
-        IERC20(MCB_TOKEN_ADDRESS).safeTransfer(account, mcbAmount);
-        IERC20(USDC_TOKEN_ADDRESS).safeTransfer(account, usdcAmount);
+        IERC20(_mcbToken()).safeTransfer(account, mcbAmount);
+        IERC20(_usdcToken()).safeTransfer(account, usdcAmount);
 
         emit EmergencySettle(account, mcbAmount, usdcAmount);
     }
@@ -149,16 +148,28 @@ contract MCBCrowdsale is Ownable {
     function forwardFunds() public {
         require(!isEmergency, "settle is not available in emergency state");
         require(isSettleable(), "settle is not active now");
-        require(!isAccountSettled(address(this)), "account has alreay settled");
-        // all usdc, back to MCDEX_MULTI_SIGN_ADDRESS
+        require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
+
         uint256 claimableUSDCAmount = totalSoldQuota().wmul(USDC_RATE);
-        IERC20(USDC_TOKEN_ADDRESS).safeTransfer(MCDEX_MULTI_SIGN_ADDRESS, claimableUSDCAmount);
+        IERC20(_usdcToken()).safeTransfer(_mcdexMultiSignWallet(), claimableUSDCAmount);
         _settlements[address(this)] = true;
 
         emit ForwardFunds(claimableUSDCAmount);
     }
 
-    function _blockTimestamp() internal view returns (uint256) {
+    function _mcbToken() internal view virtual returns (address) {
+        return MCB_TOKEN_ADDRESS;
+    }
+
+    function _usdcToken() internal view virtual returns (address) {
+        return USDC_TOKEN_ADDRESS;
+    }
+
+    function _mcdexMultiSignWallet() internal view virtual returns (address) {
+        return MCDEX_MULTI_SIGN_WALLET_ADDRESS;
+    }
+
+    function _blockTimestamp() internal view virtual returns (uint256) {
         return block.timestamp;
     }
 }
