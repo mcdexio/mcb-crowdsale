@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "./libraries/SafeMathExt.sol";
+import "hardhat/console.sol";
 
 contract MCBVesting {
     using SafeMath for uint256;
@@ -12,7 +13,6 @@ contract MCBVesting {
     using SafeERC20 for IERC20;
 
     address public constant MCB_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000;
-    address public constant VMCB_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000;
 
     uint256 public beginTime;
     uint256 public totalQuota;
@@ -20,8 +20,7 @@ contract MCBVesting {
     uint256 public cumulativeMCBBalance;
 
     mapping(address => uint256) public quotas;
-    mapping(address => uint256) public claimedQuotas;
-    mapping(address => uint256) public mcbBalanceMark;
+    mapping(address => uint256) public claimed;
 
     event AddBeneficiaries(address[] beneficiaries, uint256[] quotas);
     event Claim(address indexed account, uint256 amount);
@@ -44,23 +43,43 @@ contract MCBVesting {
     }
 
     function shareOf(address account) public view returns (uint256) {
-        return quotas[account].div(totalQuota);
+        return quotas[account].wdivFloor(totalQuota);
     }
 
     function claimableMCBToken(address account) public view returns (uint256) {
-        uint256 incremental =
-            IERC20(MCB_TOKEN_ADDRESS).balanceOf(address(this)).sub(lastMCBBalance);
-        return incremental.mul(shareOf(account));
+        if (_blockTimestamp() < beginTime) {
+            return 0;
+        }
+        uint256 incremental = IERC20(_mcbToken()).balanceOf(address(this)).sub(lastMCBBalance);
+        if (cumulativeMCBBalance.add(incremental) <= claimed[account]) {
+            return 0;
+        }
+        return cumulativeMCBBalance.add(incremental).sub(claimed[account]).wmul(shareOf(account));
     }
 
     function claimMCBToken(address account) public {
-        uint256 incremental =
-            IERC20(MCB_TOKEN_ADDRESS).balanceOf(address(this)).sub(lastMCBBalance);
+        require(_blockTimestamp() >= beginTime, "claim is not active now");
+
+        IERC20 mcbToken = IERC20(_mcbToken());
+        uint256 incremental = mcbToken.balanceOf(address(this)).sub(lastMCBBalance);
         cumulativeMCBBalance = cumulativeMCBBalance.add(incremental);
-        uint256 claimableAmount = incremental.mul(shareOf(account));
-        mcbBalanceMark[account] = cumulativeMCBBalance;
-        IERC20(MCB_TOKEN_ADDRESS).safeTransfer(account, claimableAmount);
-        lastMCBBalance = IERC20(MCB_TOKEN_ADDRESS).balanceOf(address(this));
+
+        require(cumulativeMCBBalance > claimed[account], "no token to claim");
+        uint256 claimableAmount = cumulativeMCBBalance.sub(claimed[account]).wmul(shareOf(account));
+
+        mcbToken.safeTransfer(account, claimableAmount);
+
+        claimed[account] = cumulativeMCBBalance;
+        lastMCBBalance = mcbToken.balanceOf(address(this));
+
         emit Claim(account, claimableAmount);
+    }
+
+    function _mcbToken() internal view virtual returns (address) {
+        return MCB_TOKEN_ADDRESS;
+    }
+
+    function _blockTimestamp() internal view virtual returns (uint256) {
+        return block.timestamp;
     }
 }
