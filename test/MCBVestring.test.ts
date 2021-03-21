@@ -34,15 +34,16 @@ describe('MCBVesting', () => {
     it("vesting", async () => {
         const mcb = await createContract("CustomERC20", ["MCB", "MCB", 18])
 
-        const vesting = await createContract("TestMCBVesting", [mcb.address, 0])
-        await vesting.addQuotas(
+        const vesting = await createContract("TestMCBVesting", [
+            mcb.address,
+            0,
             [user1.address, user2.address, user3.address],
-            [toWei("2"), toWei("3"), toWei("5")] // 10
-        );
+            [toWei("2"), toWei("3"), toWei("5")]
+        ])
 
-        expect(await vesting.claimableMCBToken(user1.address)).to.equal(toWei("0"))
-        expect(await vesting.claimableMCBToken(user2.address)).to.equal(toWei("0"))
-        expect(await vesting.claimableMCBToken(user3.address)).to.equal(toWei("0"))
+        expect(await vesting.claimableToken(user1.address)).to.equal(toWei("0"))
+        expect(await vesting.claimableToken(user2.address)).to.equal(toWei("0"))
+        expect(await vesting.claimableToken(user3.address)).to.equal(toWei("0"))
 
         await mcb.mint(vesting.address, toWei("1"));
 
@@ -50,30 +51,30 @@ describe('MCBVesting', () => {
         expect(await vesting.shareOf(user2.address)).to.equal(toWei("0.3"))
         expect(await vesting.shareOf(user3.address)).to.equal(toWei("0.5"))
 
-        expect(await vesting.claimableMCBToken(user1.address)).to.equal(toWei("0.2"))
-        expect(await vesting.claimableMCBToken(user2.address)).to.equal(toWei("0.3"))
-        expect(await vesting.claimableMCBToken(user3.address)).to.equal(toWei("0.5"))
+        expect(await vesting.claimableToken(user1.address)).to.equal(toWei("0.2"))
+        expect(await vesting.claimableToken(user2.address)).to.equal(toWei("0.3"))
+        expect(await vesting.claimableToken(user3.address)).to.equal(toWei("0.5"))
 
-        expect(await vesting.claimableMCBToken(user1.address)).to.equal(toWei("0.2"))
-        expect(await vesting.claimableMCBToken(user2.address)).to.equal(toWei("0.3"))
-        expect(await vesting.claimableMCBToken(user3.address)).to.equal(toWei("0.5"))
+        expect(await vesting.claimableToken(user1.address)).to.equal(toWei("0.2"))
+        expect(await vesting.claimableToken(user2.address)).to.equal(toWei("0.3"))
+        expect(await vesting.claimableToken(user3.address)).to.equal(toWei("0.5"))
 
 
         await mcb.mint(vesting.address, toWei("4"));
 
-        expect(await vesting.claimableMCBToken(user1.address)).to.equal(toWei("1"))
-        expect(await vesting.claimableMCBToken(user2.address)).to.equal(toWei("1.5"))
-        expect(await vesting.claimableMCBToken(user3.address)).to.equal(toWei("2.5"))
+        expect(await vesting.claimableToken(user1.address)).to.equal(toWei("1"))
+        expect(await vesting.claimableToken(user2.address)).to.equal(toWei("1.5"))
+        expect(await vesting.claimableToken(user3.address)).to.equal(toWei("2.5"))
 
-        await vesting.claimMCBToken(user1.address);
+        await vesting.claim(user1.address);
         expect(await mcb.balanceOf(user1.address)).to.equal(toWei("1"))
-        expect(await vesting.claimableMCBToken(user1.address)).to.equal(toWei("0"))
-        expect(await vesting.claimableMCBToken(user2.address)).to.equal(toWei("1.5"))
-        expect(await vesting.claimableMCBToken(user3.address)).to.equal(toWei("2.5"))
+        expect(await vesting.claimableToken(user1.address)).to.equal(toWei("0"))
+        expect(await vesting.claimableToken(user2.address)).to.equal(toWei("1.5"))
+        expect(await vesting.claimableToken(user3.address)).to.equal(toWei("2.5"))
 
         await mcb.mint(vesting.address, toWei("5"));
-        expect(await vesting.claimableMCBToken(user1.address)).to.equal(toWei("1"))
-        expect(await vesting.claimableMCBToken(user2.address)).to.equal(toWei("3"))
-        expect(await vesting.claimableMCBToken(user3.address)).to.equal(toWei("5"))
+        expect(await vesting.claimableToken(user1.address)).to.equal(toWei("1"))
+        expect(await vesting.claimableToken(user2.address)).to.equal(toWei("3"))
+        expect(await vesting.claimableToken(user3.address)).to.equal(toWei("5"))
     })
 })

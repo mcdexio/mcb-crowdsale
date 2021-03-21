@@ -22,23 +22,24 @@ contract MCBCrowdsale is Ownable {
         0x0000000000000000000000000000000000000000;
 
     uint256 public constant MAX_SUPPLY = 100000 * 1e18;
-    uint256 public constant USDC_RATE = 10 * 1e6;
-    uint256 public constant MCB_RATE = 4 * 1e18;
+    uint256 public constant USDC_DEPOSIT_RATE = 10 * 1e6;
+    uint256 public constant MCB_DEPOSIT_RATE = 4 * 1e18;
 
     bool public isEmergency;
     uint256 public beginTime;
     uint256 public endTime;
     uint256 public unlockTime;
 
-    uint256 internal _totalExpectedQuota;
-    mapping(address => uint256) internal _expectedQuotas;
-    mapping(address => bool) internal _settlements;
+    uint256 internal _totalSubscription;
+    mapping(address => uint256) internal _subscriptions;
+    mapping(address => bool) internal _settlementFlags;
 
-    event Purchase(uint256 quotaAmount, uint256 mcbAmount, uint256 usdcAmount);
-    event Settle(address indexed account, uint256 quotaAmount, uint256 refundUSDCAmount);
+    event Purchase(uint256 amount, uint256 depositedMCB, uint256 depositUSDC);
+    event Settle(address indexed account, uint256 settledAmount, uint256 refundUSDC);
     event ForwardFunds(uint256 claimableUSDCAmount);
     event SetEmergency();
     event EmergencySettle(address indexed account, uint256 mcbAmount, uint256 usdcAmount);
+    event EmergencyForwardFunds(uint256 mcbAmount, uint256 usdcAmount);
 
     constructor(
         uint256 beginTime_,
@@ -53,6 +54,9 @@ contract MCBCrowdsale is Ownable {
         unlockTime = endTime_.add(lockPeriod_);
     }
 
+    /**
+     * @notice
+     */
     function setEmergency() public onlyOwner {
         require(!isEmergency, "already in emergency state");
         isEmergency = true;
@@ -70,99 +74,128 @@ contract MCBCrowdsale is Ownable {
     }
 
     function isAccountSettled(address account) public view returns (bool) {
-        return _settlements[account];
+        return _settlementFlags[account];
     }
 
-    function totalExpectedQuota() public view returns (uint256) {
-        return _totalExpectedQuota;
+    function totalSubscription() public view returns (uint256) {
+        return _totalSubscription;
     }
 
-    function totalSoldQuota() public view returns (uint256) {
-        return _totalExpectedQuota.min(MAX_SUPPLY);
+    function totalSoldSupply() public view returns (uint256) {
+        return _totalSubscription.min(MAX_SUPPLY);
     }
 
-    function quotaRate() public view returns (uint256) {
-        return _totalExpectedQuota <= MAX_SUPPLY ? 1e18 : _totalExpectedQuota.wdivFloor(MAX_SUPPLY);
+    function subscriptionRate() public view returns (uint256) {
+        return _totalSubscription <= MAX_SUPPLY ? 1e18 : _totalSubscription.wdivFloor(MAX_SUPPLY);
     }
 
-    function quotaOf(address account) public view returns (uint256) {
-        return _expectedQuotas[account].wdivFloor(quotaRate());
+    function shareOf(address account) public view returns (uint256) {
+        return _subscriptions[account].wdivFloor(subscriptionRate());
     }
 
     /**
-     * @notice  Purchaser is able to buy 1 token with 4x MCB and 10x USDC.
-     *          The bought token, the deposited MCB and the refund USDC will be sent back to purchaser
+     * @notice  User is able to buy 1 token with 4x MCB and 10x USDC.
+     *          The bought token, the deposited MCB and the refund USDC will be sent back to user
      *          after an unlock period.
      */
-    function purchase(uint256 expectedQuota) public {
+    function purchase(uint256 amount) public {
         require(!isEmergency, "purchase is not available in emergency state");
         require(isPurchaseable(), "purchase is not active now");
-        require(expectedQuota > 0, "quota to buy cannot be zero");
+        require(amount > 0, "amount to buy cannot be zero");
 
-        uint256 mcbAmount = expectedQuota.wmul(MCB_RATE);
-        uint256 usdcAmount = expectedQuota.wmul(USDC_RATE);
+        uint256 depositMCB = amount.wmul(MCB_DEPOSIT_RATE);
+        uint256 depositUSDC = amount.wmul(USDC_DEPOSIT_RATE);
         // transfer
-        IERC20(_mcbToken()).safeTransferFrom(msg.sender, address(this), mcbAmount);
-        IERC20(_usdcToken()).safeTransferFrom(msg.sender, address(this), usdcAmount);
+        _mcbToken().safeTransferFrom(msg.sender, address(this), depositMCB);
+        _usdcToken().safeTransferFrom(msg.sender, address(this), depositUSDC);
 
-        _expectedQuotas[msg.sender] = _expectedQuotas[msg.sender].add(expectedQuota);
-        _totalExpectedQuota = _totalExpectedQuota.add(expectedQuota);
+        _subscriptions[msg.sender] = _subscriptions[msg.sender].add(amount);
+        _totalSubscription = _totalSubscription.add(amount);
 
-        emit Purchase(expectedQuota, mcbAmount, usdcAmount);
+        emit Purchase(amount, depositMCB, depositUSDC);
     }
 
+    /**
+     * @notice  User is able to get usdc refund if the total subscriptions exceeds target supply.
+     *
+     * @param   account The address to settle, to which the refund and deposited MCB will be transferred.
+     */
     function settle(address account) public {
         require(!isEmergency, "settle is not available in emergency state");
         require(isSettleable(), "settle is not active now");
         require(!isAccountSettled(account), "account has alreay settled");
 
-        uint256 quotaAmount = _expectedQuotas[account].wdivFloor(quotaRate());
-        uint256 mcbAmount = _expectedQuotas[account].wmul(MCB_RATE);
-        uint256 usdcAmount = _expectedQuotas[account].wmul(USDC_RATE);
-        uint256 usdcCostAmount = usdcAmount.wdivCeil(quotaRate());
-        uint256 usdcRefundAmount = 0;
+        uint256 settledAmount = _subscriptions[account].wdivFloor(subscriptionRate());
+        uint256 depositMCB = _subscriptions[account].wmul(MCB_DEPOSIT_RATE);
+        uint256 depositUSDC = _subscriptions[account].wmul(USDC_DEPOSIT_RATE);
+        uint256 costUSDC = depositUSDC.wdivCeil(subscriptionRate());
+        uint256 refundUSDC = 0;
         // usdc refund
-        if (usdcAmount > usdcCostAmount) {
-            usdcRefundAmount = usdcAmount.sub(usdcCostAmount);
-            IERC20(_usdcToken()).safeTransfer(account, usdcRefundAmount);
+        if (depositUSDC > costUSDC) {
+            refundUSDC = depositUSDC.sub(costUSDC);
+            _usdcToken().safeTransfer(account, refundUSDC);
         }
+        _mcbToken().safeTransfer(account, depositMCB);
+        _settlementFlags[account] = true;
 
-        IERC20(_mcbToken()).safeTransfer(account, mcbAmount);
-        _settlements[account] = true;
-
-        emit Settle(account, quotaAmount, usdcRefundAmount);
+        emit Settle(account, settledAmount, refundUSDC);
     }
 
-    function emergencySettle(address account) public {
-        require(isEmergency, "emergency settle is only available in emergency state");
-        uint256 mcbAmount = _expectedQuotas[account].wmul(MCB_RATE);
-        uint256 usdcAmount = _expectedQuotas[account].wmul(USDC_RATE);
-
-        _expectedQuotas[account] = 0;
-        IERC20(_mcbToken()).safeTransfer(account, mcbAmount);
-        IERC20(_usdcToken()).safeTransfer(account, usdcAmount);
-
-        emit EmergencySettle(account, mcbAmount, usdcAmount);
-    }
-
+    /**
+     * @notice  Forword funds up to sale target to a preset address.
+     */
     function forwardFunds() public {
-        require(!isEmergency, "settle is not available in emergency state");
-        require(isSettleable(), "settle is not active now");
+        require(!isEmergency, "forward is not available in emergency state");
+        require(isSettleable(), "forward is not active now");
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
 
-        uint256 claimableUSDCAmount = totalSoldQuota().wmul(USDC_RATE);
-        IERC20(_usdcToken()).safeTransfer(_mcdexMultiSignWallet(), claimableUSDCAmount);
-        _settlements[address(this)] = true;
+        uint256 fundUSDC = totalSoldSupply().wmul(USDC_DEPOSIT_RATE);
+        _usdcToken().safeTransfer(_mcdexMultiSignWallet(), fundUSDC);
+        _settlementFlags[address(this)] = true;
 
-        emit ForwardFunds(claimableUSDCAmount);
+        emit ForwardFunds(fundUSDC);
     }
 
-    function _mcbToken() internal view virtual returns (address) {
-        return MCB_TOKEN_ADDRESS;
+    /**
+     * @notice  In emergency state, user is able to withdraw all deposited assets back directly.
+     *
+     * @param   account The address to settle, to which the deposited assets will be transferred.
+     */
+    function emergencySettle(address account) public {
+        require(isEmergency, "emergency settle is only available in emergency state");
+        require(!isAccountSettled(account), "account has alreay settled");
+
+        uint256 depositedMCB = _subscriptions[account].wmul(MCB_DEPOSIT_RATE);
+        uint256 depositedUSDC = _subscriptions[account].wmul(USDC_DEPOSIT_RATE);
+
+        _subscriptions[account] = 0;
+        _mcbToken().safeTransfer(account, depositedMCB);
+        _usdcToken().safeTransfer(account, depositedUSDC);
+        _settlementFlags[account] = true;
+
+        emit EmergencySettle(account, depositedMCB, depositedUSDC);
     }
 
-    function _usdcToken() internal view virtual returns (address) {
-        return USDC_TOKEN_ADDRESS;
+    /**
+     * @notice  In emergency state, all funds can be forward to target address to prevent further loss.
+     */
+    function emergencyForwardFunds() public {
+        require(isEmergency, "emergency forward is only available in emergency state");
+
+        uint256 totalDepositedMCB = _mcbToken().balanceOf(address(this));
+        uint256 totalDepositedUSDC = _usdcToken().balanceOf(address(this));
+        _mcbToken().safeTransfer(_mcdexMultiSignWallet(), totalDepositedMCB);
+        _usdcToken().safeTransfer(_mcdexMultiSignWallet(), totalDepositedUSDC);
+
+        emit EmergencyForwardFunds(totalDepositedMCB, totalDepositedUSDC);
+    }
+
+    function _mcbToken() internal view virtual returns (IERC20) {
+        return IERC20(MCB_TOKEN_ADDRESS);
+    }
+
+    function _usdcToken() internal view virtual returns (IERC20) {
+        return IERC20(USDC_TOKEN_ADDRESS);
     }
 
     function _mcdexMultiSignWallet() internal view virtual returns (address) {

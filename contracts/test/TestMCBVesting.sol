@@ -6,12 +6,17 @@ contract TestMCBVesting is MCBVesting {
     address internal _mockMCBToken;
     uint256 internal _mockTimestamp;
 
-    constructor(address mcbToken_, uint256 beginTime_) MCBVesting(beginTime_) {
+    constructor(
+        address mcbToken_,
+        uint256 beginTime_,
+        address[] memory beneficiaries_,
+        uint256[] memory amounts_
+    ) MCBVesting(beginTime_, beneficiaries_, amounts_) {
         _mockMCBToken = mcbToken_;
     }
 
-    function _mcbToken() internal view virtual override returns (address) {
-        return _mockMCBToken;
+    function _mcbToken() internal view virtual override returns (IERC20) {
+        return IERC20(_mockMCBToken);
     }
 
     function setTimestamp(uint256 timestamp) public {
