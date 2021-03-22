@@ -44,10 +44,16 @@ contract MCBVesting {
         emit AddBeneficiaries(beneficiaries_, amounts_);
     }
 
+    /**
+     * @notice  The share of subscription amount in total amount. The value will not change during vesting.
+     */
     function shareOf(address account) public view returns (uint256) {
         return subscriptions[account].wdivFloor(totalSubscription);
     }
 
+    /**
+     * @notice  The amount can be claimed for an account.
+     */
     function claimableToken(address account) public view returns (uint256) {
         if (_blockTimestamp() < beginTime) {
             return 0;
@@ -61,6 +67,9 @@ contract MCBVesting {
         return unclaimedBalance.wmul(shareOf(account));
     }
 
+    /**
+     * @notice  Claim token.
+     */
     function claim(address account) public {
         require(_blockTimestamp() >= beginTime, "claim is not active now");
 

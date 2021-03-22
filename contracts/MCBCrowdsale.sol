@@ -56,7 +56,7 @@ contract MCBCrowdsale is Ownable {
     }
 
     /**
-     * @notice
+     * @notice  Turn contract to emergency state. Make emergencySettle / emergencyForwardFunds available.
      */
     function setEmergency() public onlyOwner {
         require(!isEmergency, "already in emergency state");
@@ -64,44 +64,72 @@ contract MCBCrowdsale is Ownable {
         emit SetEmergency();
     }
 
-    function isPurchaseable() public view returns (bool) {
+    /**
+     * @notice  A boolean to indicate if currently subscribe interface is available.
+     */
+    function isSubscribable() public view returns (bool) {
         uint256 currentTimestamp = _blockTimestamp();
         return currentTimestamp >= beginTime && currentTimestamp < endTime;
     }
 
+    /**
+     * @notice  A boolean to indicate if currently settle interface is available.
+     */
     function isSettleable() public view returns (bool) {
         uint256 currentTimestamp = _blockTimestamp();
         return currentTimestamp >= unlockTime;
     }
 
+    /**
+     * @notice  A boolean to indicate if the given account is already settled.
+     */
     function isAccountSettled(address account) public view returns (bool) {
         return _settlementFlags[account];
     }
 
+    /**
+     * @notice  Total raw amount of users subscribed. This amount may exceed MAX_SUPPLY.
+     */
     function totalSubscription() public view returns (uint256) {
         return _totalSubscription;
     }
 
-    function totalSoldSupply() public view returns (uint256) {
+    /**
+     * @notice  Total amount of MCB subscribed by user. It should not exceed MAX_SUPPLY.
+     */
+    function totalSubscribedSupply() public view returns (uint256) {
         return _totalSubscription.min(MAX_SUPPLY);
     }
 
+    /**
+     * @notice  The percentage of token sold and total supply.
+     */
     function subscriptionRate() public view returns (uint256) {
         return _totalSubscription <= MAX_SUPPLY ? 1e18 : _totalSubscription.wdivFloor(MAX_SUPPLY);
     }
 
+    /**
+     * @notice  The raw amount of an account subscribed.
+     */
+    function subscriptionOf(address account) public view returns (uint256) {
+        return _subscriptions[account];
+    }
+
+    /**
+     * @notice  The share of amount in total subscription amount for an account.
+     */
     function shareOf(address account) public view returns (uint256) {
         return _subscriptions[account].wdivFloor(subscriptionRate());
     }
 
     /**
-     * @notice  User is able to buy 1 token with 4x MCB and 10x USDC.
-     *          The bought token, the deposited MCB and the refund USDC will be sent back to user
+     * @notice  User is able to subscribe 1 MCB token with 4x MCB and 10x USDC.
+     *          All MCB deposited and refund USDC (if any) will be sent back to user
      *          after an unlock period.
      */
-    function purchase(uint256 amount) public {
-        require(!isEmergency, "purchase is not available in emergency state");
-        require(isPurchaseable(), "purchase is not active now");
+    function subscribe(uint256 amount) public {
+        require(!isEmergency, "subscribe is not available in emergency state");
+        require(isSubscribable(), "subscribe is not active now");
         require(amount > 0, "amount to buy cannot be zero");
 
         uint256 depositMCB = amount.wmul(MCB_DEPOSIT_RATE);
@@ -150,7 +178,7 @@ contract MCBCrowdsale is Ownable {
         require(isSettleable(), "forward is not active now");
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
 
-        uint256 fundUSDC = totalSoldSupply().wmul(USDC_DEPOSIT_RATE);
+        uint256 fundUSDC = totalSubscribedSupply().wmul(USDC_DEPOSIT_RATE);
         _usdcToken().safeTransfer(_mcdexMultiSignWallet(), fundUSDC);
         _settlementFlags[address(this)] = true;
 

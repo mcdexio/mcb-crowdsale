@@ -67,6 +67,7 @@ describe('MCBVesting', () => {
         expect(await vesting.claimableToken(user3.address)).to.equal(toWei("2.5"))
 
         await vesting.claim(user1.address);
+        await expect(vesting.claim(user1.address)).to.be.revertedWith("no token to claim");
         expect(await mcb.balanceOf(user1.address)).to.equal(toWei("1"))
         expect(await vesting.claimableToken(user1.address)).to.equal(toWei("0"))
         expect(await vesting.claimableToken(user2.address)).to.equal(toWei("1.5"))
