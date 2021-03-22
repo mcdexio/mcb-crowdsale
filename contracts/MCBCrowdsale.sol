@@ -17,8 +17,8 @@ contract MCBCrowdsale is Ownable {
     using SafeMathExt for uint256;
     using SafeERC20 for IERC20;
 
-    address public constant MCB_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000;
-    address public constant USDC_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000;
+    address public constant MCB_TOKEN_ADDRESS = 0x4e352cf164e64adcbad318c3a1e222e9eba4ce42;
+    address public constant USDC_TOKEN_ADDRESS = 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48;
     address public constant MCDEX_MULTI_SIGN_WALLET_ADDRESS =
         0x0000000000000000000000000000000000000000;
 
