@@ -19,7 +19,7 @@ MCBVesting is a contract to distribute MCB tokens to beneficiaries.
 
 The releasing amount is based on current minted MCB token from `Minter` in MCDEX DAO.
 
-The beneficiary can claim their token every time when the new minted MCB tokens put in, according to the shares then owned. All beneficiaries are preset and cannot be modified.
+The beneficiary can claim their token every time when the new minted MCB tokens put in, according to the shares then owned. All beneficiaries are initialized in constructor and cannot be modified.
 
 ## install
 
