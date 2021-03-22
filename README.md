@@ -4,6 +4,8 @@
 
 **contracts/MCBCrowdsale.sol**
 
+![Flow](./misc/flow.png)
+
 MCBCrowdsale is a contract for MCB holders to pre-purchase future releasing MCB token. To buy 1 MCB token, the buy need to deposit 4x MCB token and 10x USDC.
 
 If the total amount raised exceeds the target, the purchasers' share will decrease in equal proportion. The deposited MCB and the USDC in excess of the fundraising target can be fully withdrawn after unlock period.
