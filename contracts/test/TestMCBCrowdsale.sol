@@ -30,7 +30,7 @@ contract TestMCBCrowdsale is MCBCrowdsale {
         return IERC20(_mockUSDCToken);
     }
 
-    function _mcdexMultiSignWallet() internal view virtual override returns (address) {
+    function _mcdexFoundation() internal view virtual override returns (address) {
         return _mockMultiSignWallet;
     }
 

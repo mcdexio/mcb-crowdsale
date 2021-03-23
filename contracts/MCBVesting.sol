@@ -13,7 +13,7 @@ contract MCBVesting {
     using SafeMathExt for uint256;
     using SafeERC20 for IERC20;
 
-    address public constant MCB_TOKEN_ADDRESS = 0x4e352cf164e64adcbad318c3a1e222e9eba4ce42;
+    address public constant MCB_TOKEN_ADDRESS = 0x4e352cF164E64ADCBad318C3a1e222E9EBa4Ce42;
 
     uint256 public beginTime;
     uint256 public totalSubscription;

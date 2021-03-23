@@ -17,10 +17,9 @@ contract MCBCrowdsale is Ownable {
     using SafeMathExt for uint256;
     using SafeERC20 for IERC20;
 
-    address public constant MCB_TOKEN_ADDRESS = 0x4e352cf164e64adcbad318c3a1e222e9eba4ce42;
-    address public constant USDC_TOKEN_ADDRESS = 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48;
-    address public constant MCDEX_MULTI_SIGN_WALLET_ADDRESS =
-        0x0000000000000000000000000000000000000000;
+    address public constant MCB_TOKEN_ADDRESS = 0x4e352cF164E64ADCBad318C3a1e222E9EBa4Ce42;
+    address public constant USDC_TOKEN_ADDRESS = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address public constant MCDEX_FOUNDATION_ADDRESS = 0x0000000000000000000000000000000000000000;
 
     uint256 public constant MAX_SUPPLY = 100000 * 1e18;
     uint256 public constant USDC_DEPOSIT_RATE = 10 * 1e6;
@@ -179,7 +178,7 @@ contract MCBCrowdsale is Ownable {
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
 
         uint256 fundUSDC = totalSubscribedSupply().wmul(USDC_DEPOSIT_RATE);
-        _usdcToken().safeTransfer(_mcdexMultiSignWallet(), fundUSDC);
+        _usdcToken().safeTransfer(_mcdexFoundation(), fundUSDC);
         _settlementFlags[address(this)] = true;
 
         emit ForwardFunds(fundUSDC);
@@ -213,8 +212,8 @@ contract MCBCrowdsale is Ownable {
 
         uint256 totalDepositedMCB = _mcbToken().balanceOf(address(this));
         uint256 totalDepositedUSDC = _usdcToken().balanceOf(address(this));
-        _mcbToken().safeTransfer(_mcdexMultiSignWallet(), totalDepositedMCB);
-        _usdcToken().safeTransfer(_mcdexMultiSignWallet(), totalDepositedUSDC);
+        _mcbToken().safeTransfer(_mcdexFoundation(), totalDepositedMCB);
+        _usdcToken().safeTransfer(_mcdexFoundation(), totalDepositedUSDC);
 
         emit EmergencyForwardFunds(totalDepositedMCB, totalDepositedUSDC);
     }
@@ -227,8 +226,8 @@ contract MCBCrowdsale is Ownable {
         return IERC20(USDC_TOKEN_ADDRESS);
     }
 
-    function _mcdexMultiSignWallet() internal view virtual returns (address) {
-        return MCDEX_MULTI_SIGN_WALLET_ADDRESS;
+    function _mcdexFoundation() internal view virtual returns (address) {
+        return MCDEX_FOUNDATION_ADDRESS;
     }
 
     function _blockTimestamp() internal view virtual returns (uint256) {
