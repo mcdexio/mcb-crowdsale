@@ -207,7 +207,7 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  In emergency state, all funds can be forward to target address to prevent further loss.
      */
-    function emergencyForwardFunds() public {
+    function emergencyForwardFunds() public onlyOwner {
         require(isEmergency, "emergency forward is only available in emergency state");
 
         uint256 totalDepositedMCB = _mcbToken().balanceOf(address(this));

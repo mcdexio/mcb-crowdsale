@@ -17,7 +17,7 @@ contract MCBVesting {
 
     uint256 public beginTime;
     uint256 public totalSubscription;
-    uint256 public lastMarkedBalance;
+    uint256 public lastRemainingBalance;
     uint256 public cumulativeBalance;
 
     mapping(address => uint256) public subscriptions;
@@ -58,8 +58,8 @@ contract MCBVesting {
         if (_blockTimestamp() < beginTime) {
             return 0;
         }
-        uint256 incremental = _mcbToken().balanceOf(address(this)).sub(lastMarkedBalance);
-        uint256 currentCumulativeBalance = cumulativeBalance.add(incremental);
+        uint256 incrementalBalance = _mcbToken().balanceOf(address(this)).sub(lastRemainingBalance);
+        uint256 currentCumulativeBalance = cumulativeBalance.add(incrementalBalance);
         if (currentCumulativeBalance <= claimedCumulativeBalances[account]) {
             return 0;
         }
@@ -74,8 +74,8 @@ contract MCBVesting {
         require(_blockTimestamp() >= beginTime, "claim is not active now");
 
         IERC20 mcbToken = _mcbToken();
-        uint256 incremental = mcbToken.balanceOf(address(this)).sub(lastMarkedBalance);
-        cumulativeBalance = cumulativeBalance.add(incremental);
+        uint256 incrementalBalance = mcbToken.balanceOf(address(this)).sub(lastRemainingBalance);
+        cumulativeBalance = cumulativeBalance.add(incrementalBalance);
 
         require(cumulativeBalance > claimedCumulativeBalances[account], "no token to claim");
         uint256 claimableAmount =
@@ -83,7 +83,7 @@ contract MCBVesting {
         mcbToken.safeTransfer(account, claimableAmount);
 
         claimedCumulativeBalances[account] = cumulativeBalance;
-        lastMarkedBalance = mcbToken.balanceOf(address(this));
+        lastRemainingBalance = mcbToken.balanceOf(address(this));
 
         emit Claim(account, claimableAmount);
     }
