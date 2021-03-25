@@ -39,6 +39,6 @@ contract TestMCBCrowdsale is MCBCrowdsale {
     }
 
     function _blockTimestamp() internal view virtual override returns (uint256) {
-        return _mockTimestamp;
+        return _mockTimestamp == 0 ? block.timestamp : _mockTimestamp;
     }
 }
