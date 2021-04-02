@@ -15,11 +15,11 @@ contract MCBVesting {
     address public constant MCB_TOKEN_ADDRESS = 0x4e352cF164E64ADCBad318C3a1e222E9EBa4Ce42;
 
     uint256 public beginTime;
-    uint256 public totalSubscription;
+    uint256 public totalCommitment;
     uint256 public lastRemainingBalance;
     uint256 public cumulativeBalance;
 
-    mapping(address => uint256) public subscriptions;
+    mapping(address => uint256) public commitments;
     mapping(address => uint256) public claimedCumulativeBalances;
 
     event AddBeneficiaries(address[] beneficiaries, uint256[] amounts);
@@ -37,17 +37,17 @@ contract MCBVesting {
             uint256 amount = amounts_[i];
             require(beneficiary != address(0), "beneficiary cannot be zero address");
             require(amount != 0, "amount cannot be zero");
-            subscriptions[beneficiary] = amount;
-            totalSubscription = totalSubscription.add(amount);
+            commitments[beneficiary] = amount;
+            totalCommitment = totalCommitment.add(amount);
         }
         emit AddBeneficiaries(beneficiaries_, amounts_);
     }
 
     /**
-     * @notice  The share of subscription amount in total amount. The value will not change during vesting.
+     * @notice  The share of commitment amount in total amount. The value will not change during vesting.
      */
     function shareOf(address account) public view returns (uint256) {
-        return subscriptions[account].wdivFloor(totalSubscription);
+        return commitments[account].wdivFloor(totalCommitment);
     }
 
     /**

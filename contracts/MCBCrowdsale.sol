@@ -31,8 +31,8 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
     uint256 public unlockTime;
     uint256 public emergencyUnlockTime;
 
-    uint256 internal _totalSubscription;
-    mapping(address => uint256) internal _subscriptions;
+    uint256 internal _totalCommitment;
+    mapping(address => uint256) internal _commitments;
     mapping(address => bool) internal _settlementFlags;
 
     event Purchase(uint256 amount, uint256 depositedMCB, uint256 depositUSDC);
@@ -68,9 +68,9 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice  A boolean to indicate if currently subscribe interface is available.
+     * @notice  A boolean to indicate if currently commit interface is available.
      */
-    function isSubscribable() public view returns (bool) {
+    function isCommitable() public view returns (bool) {
         uint256 currentTimestamp = _blockTimestamp();
         return currentTimestamp >= beginTime && currentTimestamp < endTime;
     }
@@ -91,48 +91,48 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice  Total raw amount of users subscribed. This amount may exceed MAX_SUPPLY.
+     * @notice  Total raw amount of users commited. This amount may exceed MAX_SUPPLY.
      */
-    function totalSubscription() external view returns (uint256) {
-        return _totalSubscription;
+    function totalCommitment() external view returns (uint256) {
+        return _totalCommitment;
     }
 
     /**
-     * @notice  Total amount of MCB subscribed by user. It should not exceed MAX_SUPPLY.
+     * @notice  Total amount of MCB commited by user. It should not exceed MAX_SUPPLY.
      */
-    function totalSubscribedSupply() public view returns (uint256) {
-        return _totalSubscription.min(MAX_SUPPLY);
+    function totalCommitedSupply() public view returns (uint256) {
+        return _totalCommitment.min(MAX_SUPPLY);
     }
 
     /**
      * @notice  The percentage of token sold and total supply.
      */
-    function subscriptionRate() public view returns (uint256) {
-        return _totalSubscription <= MAX_SUPPLY ? 1e18 : _totalSubscription.wdivFloor(MAX_SUPPLY);
+    function commitmentRate() public view returns (uint256) {
+        return _totalCommitment <= MAX_SUPPLY ? 1e18 : _totalCommitment.wdivFloor(MAX_SUPPLY);
     }
 
     /**
-     * @notice  The raw amount of an account subscribed.
+     * @notice  The raw amount of an account commited.
      */
-    function subscriptionOf(address account) external view returns (uint256) {
-        return _subscriptions[account];
+    function commitmentOf(address account) external view returns (uint256) {
+        return _commitments[account];
     }
 
     /**
-     * @notice  The share of amount in total subscription amount for an account.
+     * @notice  The share of amount in total commited amount for an account.
      */
     function shareOf(address account) external view returns (uint256) {
-        return _subscriptions[account].wdivFloor(subscriptionRate());
+        return _commitments[account].wdivFloor(commitmentRate());
     }
 
     /**
-     * @notice  User is able to subscribe 1 MCB token with 4x MCB and 10x USDC.
+     * @notice  User is able to commit 1 MCB token with 4x MCB and 10x USDC.
      *          All MCB deposited and refund USDC (if any) will be sent back to user
      *          after an unlock period.
      */
-    function subscribe(uint256 amount) external {
-        require(!isEmergency, "subscribe is not available in emergency state");
-        require(isSubscribable(), "subscribe is not active now");
+    function commit(uint256 amount) external {
+        require(!isEmergency, "commit is not available in emergency state");
+        require(isCommitable(), "commit is not active now");
         require(amount > 0, "amount to buy cannot be zero");
 
         uint256 depositMCB = amount.wmul(MCB_DEPOSIT_RATE);
@@ -141,8 +141,8 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
         _mcbToken().safeTransferFrom(msg.sender, address(this), depositMCB);
         _usdcToken().safeTransferFrom(msg.sender, address(this), depositUSDC);
 
-        _subscriptions[msg.sender] = _subscriptions[msg.sender].add(amount);
-        _totalSubscription = _totalSubscription.add(amount);
+        _commitments[msg.sender] = _commitments[msg.sender].add(amount);
+        _totalCommitment = _totalCommitment.add(amount);
 
         emit Purchase(amount, depositMCB, depositUSDC);
     }
@@ -156,10 +156,10 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
         require(isSettleable(), "settle is not active now");
         require(!isAccountSettled(account), "account has alreay settled");
 
-        uint256 settledAmount = _subscriptions[account].wdivFloor(subscriptionRate());
-        uint256 depositMCB = _subscriptions[account].wmul(MCB_DEPOSIT_RATE);
-        uint256 depositUSDC = _subscriptions[account].wmul(USDC_DEPOSIT_RATE);
-        uint256 costUSDC = depositUSDC.wdivCeil(subscriptionRate());
+        uint256 settledAmount = _commitments[account].wdivFloor(commitmentRate());
+        uint256 depositMCB = _commitments[account].wmul(MCB_DEPOSIT_RATE);
+        uint256 depositUSDC = _commitments[account].wmul(USDC_DEPOSIT_RATE);
+        uint256 costUSDC = depositUSDC.wdivCeil(commitmentRate());
         uint256 refundUSDC = 0;
         // usdc refund
         _settlementFlags[account] = true;
@@ -184,7 +184,7 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
 
         _settlementFlags[address(this)] = true;
-        uint256 fundUSDC = totalSubscribedSupply().wmul(USDC_DEPOSIT_RATE);
+        uint256 fundUSDC = totalCommitedSupply().wmul(USDC_DEPOSIT_RATE);
         _usdcToken().safeTransfer(_mcdexFoundation(), fundUSDC);
 
         emit ForwardFunds(fundUSDC);
@@ -199,11 +199,11 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
         require(isEmergency, "emergency settle is only available in emergency state");
         require(!isAccountSettled(account), "account has alreay settled");
 
-        uint256 depositedMCB = _subscriptions[account].wmul(MCB_DEPOSIT_RATE);
-        uint256 depositedUSDC = _subscriptions[account].wmul(USDC_DEPOSIT_RATE);
+        uint256 depositedMCB = _commitments[account].wmul(MCB_DEPOSIT_RATE);
+        uint256 depositedUSDC = _commitments[account].wmul(USDC_DEPOSIT_RATE);
 
-        _totalSubscription = _totalSubscription.sub(_subscriptions[account]);
-        _subscriptions[account] = 0;
+        _totalCommitment = _totalCommitment.sub(_commitments[account]);
+        _commitments[account] = 0;
         _settlementFlags[account] = true;
 
         _mcbToken().safeTransfer(account, depositedMCB);
