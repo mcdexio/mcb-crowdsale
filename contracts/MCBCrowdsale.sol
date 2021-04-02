@@ -57,7 +57,7 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  Turn contract to emergency state. Make emergencySettle / emergencyForwardFunds available.
      */
-    function setEmergency() public onlyOwner {
+    function setEmergency() external onlyOwner {
         require(!isEmergency, "already in emergency state");
         isEmergency = true;
         emit SetEmergency();
@@ -89,7 +89,7 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  Total raw amount of users subscribed. This amount may exceed MAX_SUPPLY.
      */
-    function totalSubscription() public view returns (uint256) {
+    function totalSubscription() external view returns (uint256) {
         return _totalSubscription;
     }
 
@@ -110,14 +110,14 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  The raw amount of an account subscribed.
      */
-    function subscriptionOf(address account) public view returns (uint256) {
+    function subscriptionOf(address account) external view returns (uint256) {
         return _subscriptions[account];
     }
 
     /**
      * @notice  The share of amount in total subscription amount for an account.
      */
-    function shareOf(address account) public view returns (uint256) {
+    function shareOf(address account) external view returns (uint256) {
         return _subscriptions[account].wdivFloor(subscriptionRate());
     }
 
@@ -126,7 +126,7 @@ contract MCBCrowdsale is Ownable {
      *          All MCB deposited and refund USDC (if any) will be sent back to user
      *          after an unlock period.
      */
-    function subscribe(uint256 amount) public {
+    function subscribe(uint256 amount) external {
         require(!isEmergency, "subscribe is not available in emergency state");
         require(isSubscribable(), "subscribe is not active now");
         require(amount > 0, "amount to buy cannot be zero");
@@ -148,7 +148,7 @@ contract MCBCrowdsale is Ownable {
      *
      * @param   account The address to settle, to which the refund and deposited MCB will be transferred.
      */
-    function settle(address account) public {
+    function settle(address account) external {
         require(!isEmergency, "settle is not available in emergency state");
         require(isSettleable(), "settle is not active now");
         require(!isAccountSettled(account), "account has alreay settled");
@@ -172,7 +172,7 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  Forword funds up to sale target to a preset address.
      */
-    function forwardFunds() public {
+    function forwardFunds() external {
         require(!isEmergency, "forward is not available in emergency state");
         require(isSettleable(), "forward is not active now");
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
@@ -189,7 +189,7 @@ contract MCBCrowdsale is Ownable {
      *
      * @param   account The address to settle, to which the deposited assets will be transferred.
      */
-    function emergencySettle(address account) public {
+    function emergencySettle(address account) external {
         require(isEmergency, "emergency settle is only available in emergency state");
         require(!isAccountSettled(account), "account has alreay settled");
 
@@ -207,7 +207,7 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  In emergency state, all funds can be forward to target address to prevent further loss.
      */
-    function emergencyForwardFunds() public onlyOwner {
+    function emergencyForwardFunds() external onlyOwner {
         require(isEmergency, "emergency forward is only available in emergency state");
 
         uint256 totalDepositedMCB = _mcbToken().balanceOf(address(this));
