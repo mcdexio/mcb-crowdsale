@@ -10,8 +10,6 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./libraries/SafeMathExt.sol";
 
-import "hardhat/console.sol";
-
 contract MCBCrowdsale is Ownable, ReentrancyGuard {
     using Math for uint256;
     using SafeMath for uint256;
