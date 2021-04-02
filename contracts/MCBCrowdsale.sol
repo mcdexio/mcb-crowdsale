@@ -6,12 +6,13 @@ import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./libraries/SafeMathExt.sol";
 
 import "hardhat/console.sol";
 
-contract MCBCrowdsale is Ownable {
+contract MCBCrowdsale is Ownable, ReentrancyGuard {
     using Math for uint256;
     using SafeMath for uint256;
     using SafeMathExt for uint256;
@@ -45,7 +46,7 @@ contract MCBCrowdsale is Ownable {
         uint256 beginTime_,
         uint256 endTime_,
         uint256 lockPeriod_
-    ) Ownable() {
+    ) Ownable() ReentrancyGuard() {
         require(beginTime_ <= endTime_, "start time cannot be later than end time");
         require(lockPeriod_ <= 86400 * 7, "lock period too long");
 
@@ -148,7 +149,7 @@ contract MCBCrowdsale is Ownable {
      *
      * @param   account The address to settle, to which the refund and deposited MCB will be transferred.
      */
-    function settle(address account) external {
+    function settle(address account) external nonReentrant {
         require(!isEmergency, "settle is not available in emergency state");
         require(isSettleable(), "settle is not active now");
         require(!isAccountSettled(account), "account has alreay settled");
@@ -172,7 +173,7 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  Forword funds up to sale target to a preset address.
      */
-    function forwardFunds() external {
+    function forwardFunds() external nonReentrant {
         require(!isEmergency, "forward is not available in emergency state");
         require(isSettleable(), "forward is not active now");
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
@@ -189,7 +190,7 @@ contract MCBCrowdsale is Ownable {
      *
      * @param   account The address to settle, to which the deposited assets will be transferred.
      */
-    function emergencySettle(address account) external {
+    function emergencySettle(address account) external nonReentrant {
         require(isEmergency, "emergency settle is only available in emergency state");
         require(!isAccountSettled(account), "account has alreay settled");
 
@@ -207,7 +208,7 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  In emergency state, all funds can be forward to target address to prevent further loss.
      */
-    function emergencyForwardFunds() external onlyOwner {
+    function emergencyForwardFunds() external onlyOwner nonReentrant {
         require(isEmergency, "emergency forward is only available in emergency state");
 
         uint256 totalDepositedMCB = _mcbToken().balanceOf(address(this));
