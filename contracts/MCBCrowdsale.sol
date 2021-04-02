@@ -160,12 +160,12 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
         uint256 costUSDC = depositUSDC.wdivCeil(subscriptionRate());
         uint256 refundUSDC = 0;
         // usdc refund
+        _settlementFlags[account] = true;
         if (depositUSDC > costUSDC) {
             refundUSDC = depositUSDC.sub(costUSDC);
             _usdcToken().safeTransfer(account, refundUSDC);
         }
         _mcbToken().safeTransfer(account, depositMCB);
-        _settlementFlags[account] = true;
 
         emit Settle(account, settledAmount, refundUSDC);
     }
@@ -178,9 +178,9 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
         require(isSettleable(), "forward is not active now");
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
 
+        _settlementFlags[address(this)] = true;
         uint256 fundUSDC = totalSubscribedSupply().wmul(USDC_DEPOSIT_RATE);
         _usdcToken().safeTransfer(_mcdexFoundation(), fundUSDC);
-        _settlementFlags[address(this)] = true;
 
         emit ForwardFunds(fundUSDC);
     }
@@ -198,9 +198,9 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
         uint256 depositedUSDC = _subscriptions[account].wmul(USDC_DEPOSIT_RATE);
 
         _subscriptions[account] = 0;
+        _settlementFlags[account] = true;
         _mcbToken().safeTransfer(account, depositedMCB);
         _usdcToken().safeTransfer(account, depositedUSDC);
-        _settlementFlags[account] = true;
 
         emit EmergencySettle(account, depositedMCB, depositedUSDC);
     }
