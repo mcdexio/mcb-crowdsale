@@ -46,7 +46,7 @@ describe('MCBCrowdsale', () => {
         await mcb.mint(user2.address, toWei("4000"))
         await mcb.connect(user2).approve(cs.address, toWei("100000000000"))
 
-
+        await cs.setTimestamp(10);
         await expect(cs.connect(user1).subscribe(toWei("0"))).to.be.revertedWith("amount to buy cannot be zero")
         await cs.connect(user1).subscribe(toWei("100"));
         expect(await cs.shareOf(user1.address)).to.equal(toWei("100"));
@@ -80,6 +80,7 @@ describe('MCBCrowdsale', () => {
         await mcb.mint(user2.address, toWei("400000"))
         await mcb.connect(user2).approve(cs.address, toWei("100000000000"))
 
+        await cs.setTimestamp(10);
         expect(await cs.isSubscribable()).to.be.true;
 
         await cs.connect(user1).subscribe(toWei("60000"));
@@ -303,7 +304,7 @@ describe('MCBCrowdsale', () => {
         expect(await mcb.balanceOf(cs.address)).to.equal(toWei("0"));
     })
 
-    it("emergency when locked", async () => {
+    it("emergency when locked - all settled before forward", async () => {
         const usdc = await createContract("CustomERC20", ["MCB", "MCB", 6])
         const mcb = await createContract("CustomERC20", ["MCB", "MCB", 18])
         const cs = await createContract("TestMCBCrowdsale", [mcb.address, usdc.address, user3.address, 1000, 2000, 1000]);
@@ -334,9 +335,20 @@ describe('MCBCrowdsale', () => {
 
         expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("0"));
         expect(await mcb.balanceOf(cs.address)).to.equal(toWei("0"));
+
+        await expect(cs.forwardFunds()).to.be.revertedWith("forward is not active now")
+
+        await cs.setTimestamp(3000);
+        await expect(cs.forwardFunds()).to.be.revertedWith("time has not yet passed the emergency lock time")
+
+        await cs.setTimestamp(3000 + 86400 * 2);
+        await cs.forwardFunds();
+
+        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("0"));
+        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("0"));
     })
 
-    it("emergency when settled", async () => {
+    it("emergency when locked - not all settled before forward", async () => {
         const usdc = await createContract("CustomERC20", ["MCB", "MCB", 6])
         const mcb = await createContract("CustomERC20", ["MCB", "MCB", 18])
         const cs = await createContract("TestMCBCrowdsale", [mcb.address, usdc.address, user3.address, 1000, 2000, 1000]);
@@ -355,7 +367,7 @@ describe('MCBCrowdsale', () => {
         await cs.connect(user1).subscribe(toWei("120000"));
         await cs.connect(user2).subscribe(toWei("40000"));
 
-        await cs.setTimestamp(3000);
+        await cs.setTimestamp(2000);
         await cs.setEmergency();
         await expect(cs.setEmergency()).to.be.revertedWith("already in emergency state")
 
@@ -363,13 +375,24 @@ describe('MCBCrowdsale', () => {
         expect(await mcb.balanceOf(cs.address)).to.equal(toWei("640000"));
 
         await cs.emergencySettle(user1.address);
+
+        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("400000"));
+        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("160000"));
+
+        await expect(cs.forwardFunds()).to.be.revertedWith("forward is not active now")
+
+        await cs.setTimestamp(3000);
         await cs.emergencySettle(user2.address);
+        await expect(cs.forwardFunds()).to.be.revertedWith("time has not yet passed the emergency lock time")
+
+        await cs.setTimestamp(3000 + 86400 * 2);
+        await cs.forwardFunds();
 
         expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("0"));
         expect(await mcb.balanceOf(cs.address)).to.equal(toWei("0"));
     })
 
-    it("emergency when partial settled", async () => {
+    it("emergency when locked - settle after forward 1", async () => {
         const usdc = await createContract("CustomERC20", ["MCB", "MCB", 6])
         const mcb = await createContract("CustomERC20", ["MCB", "MCB", 18])
         const cs = await createContract("TestMCBCrowdsale", [mcb.address, usdc.address, user3.address, 1000, 2000, 1000]);
@@ -388,24 +411,85 @@ describe('MCBCrowdsale', () => {
         await cs.connect(user1).subscribe(toWei("120000"));
         await cs.connect(user2).subscribe(toWei("40000"));
 
-        await cs.setTimestamp(3000);
-
-        await cs.settle(user1.address) // get all mcb and 45000 usdc
-
-        await expect(cs.emergencyForwardFunds()).to.be.revertedWith("emergency forward is only available in emergency state")
-
+        await cs.setTimestamp(2000);
         await cs.setEmergency();
-        await cs.emergencySettle(user2.address)
+        await expect(cs.setEmergency()).to.be.revertedWith("already in emergency state")
 
-        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("750000", 1));
-        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("0"));
+        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("1600000"));
+        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("640000"));
 
-        await expect(cs.forwardFunds()).to.be.revertedWith("forward is not available in emergency state")
-        await cs.emergencyForwardFunds();
+        await cs.emergencySettle(user1.address);
 
-        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("0"));
-        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("0"));
-        expect(await usdc.balanceOf(user3.address)).to.equal(toUSDC("750000", 1));
+        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("400000"));
+        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("160000"));
 
+        await expect(cs.forwardFunds()).to.be.revertedWith("forward is not active now")
+
+        await cs.setTimestamp(3000);
+        await expect(cs.forwardFunds()).to.be.revertedWith("time has not yet passed the emergency lock time")
+
+        await cs.setTimestamp(3000 + 86400 * 2);
+
+        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("400000"));
+        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("160000"));
+
+        await cs.forwardFunds();
+
+        expect(await usdc.balanceOf(user3.address)).to.equal(toUSDC("400000"));
+        expect(await mcb.balanceOf(user3.address)).to.equal(toWei("0"));
+
+        await cs.settle(user2.address);
+        expect(await usdc.balanceOf(user2.address)).to.equal(toUSDC("9600000")); // 10000000 - 400000
+        expect(await mcb.balanceOf(user2.address)).to.equal(toWei("4000000"));
+    })
+
+    it("emergency when locked - settle after forward 2", async () => {
+        const usdc = await createContract("CustomERC20", ["MCB", "MCB", 6])
+        const mcb = await createContract("CustomERC20", ["MCB", "MCB", 18])
+        const cs = await createContract("TestMCBCrowdsale", [mcb.address, usdc.address, user3.address, 1000, 2000, 1000]);
+
+        await usdc.mint(user1.address, toUSDC("10000000"))
+        await usdc.connect(user1).approve(cs.address, toUSDC("100000000000"))
+        await mcb.mint(user1.address, toWei("4000000"))
+        await mcb.connect(user1).approve(cs.address, toWei("100000000000"))
+
+        await usdc.mint(user2.address, toUSDC("10000000"))
+        await usdc.connect(user2).approve(cs.address, toUSDC("100000000000"))
+        await mcb.mint(user2.address, toWei("4000000"))
+        await mcb.connect(user2).approve(cs.address, toWei("100000000000"))
+
+        await cs.setTimestamp(1000);
+        await cs.connect(user1).subscribe(toWei("120000"));
+        await cs.connect(user2).subscribe(toWei("40000"));
+
+        await cs.setTimestamp(2000);
+        await cs.setEmergency();
+        await expect(cs.setEmergency()).to.be.revertedWith("already in emergency state")
+
+        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("1600000"));
+        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("640000"));
+
+        await cs.emergencySettle(user1.address);
+
+        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("400000"));
+        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("160000"));
+
+        await expect(cs.forwardFunds()).to.be.revertedWith("forward is not active now")
+
+        await cs.setTimestamp(3000);
+        await expect(cs.forwardFunds()).to.be.revertedWith("time has not yet passed the emergency lock time")
+
+        await cs.setTimestamp(3000 + 86400 * 2);
+
+        expect(await usdc.balanceOf(cs.address)).to.equal(toUSDC("400000"));
+        expect(await mcb.balanceOf(cs.address)).to.equal(toWei("160000"));
+
+        await cs.settle(user2.address);
+        expect(await usdc.balanceOf(user2.address)).to.equal(toUSDC("9600000")); // 10000000 - 400000
+        expect(await mcb.balanceOf(user2.address)).to.equal(toWei("4000000"));
+
+        await cs.forwardFunds();
+        expect(await usdc.balanceOf(user3.address)).to.equal(toUSDC("400000"));
+        expect(await mcb.balanceOf(user3.address)).to.equal(toWei("0"));
     })
 })

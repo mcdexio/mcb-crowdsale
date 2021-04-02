@@ -23,11 +23,13 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
     uint256 public constant MAX_SUPPLY = 100000 * 1e18;
     uint256 public constant USDC_DEPOSIT_RATE = 10 * 1e6;
     uint256 public constant MCB_DEPOSIT_RATE = 4 * 1e18;
+    uint256 public constant EMERGENCY_LOCK_PERIOD = 2 days;
 
     bool public isEmergency;
     uint256 public beginTime;
     uint256 public endTime;
     uint256 public unlockTime;
+    uint256 public emergencyUnlockTime;
 
     uint256 internal _totalSubscription;
     mapping(address => uint256) internal _subscriptions;
@@ -54,11 +56,14 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice  Turn contract to emergency state. Make emergencySettle / emergencyForwardFunds available.
+     * @notice  Turn contract to emergency state. Make emergencySettle available.
+     *          Only can be called before unlock.
      */
     function setEmergency() external onlyOwner {
+        require(_blockTimestamp() < unlockTime, "can only set emergency before unlock time");
         require(!isEmergency, "already in emergency state");
         isEmergency = true;
+        emergencyUnlockTime = _blockTimestamp().add(EMERGENCY_LOCK_PERIOD);
         emit SetEmergency();
     }
 
@@ -172,6 +177,10 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
      */
     function forwardFunds() external nonReentrant onlyOwner {
         require(isSettleable(), "forward is not active now");
+        require(
+            _blockTimestamp() >= emergencyUnlockTime,
+            "time has not yet passed the emergency lock time"
+        );
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
 
         _settlementFlags[address(this)] = true;
