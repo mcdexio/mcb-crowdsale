@@ -6,12 +6,11 @@ import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./libraries/SafeMathExt.sol";
 
-import "hardhat/console.sol";
-
-contract MCBCrowdsale is Ownable {
+contract MCBCrowdsale is Ownable, ReentrancyGuard {
     using Math for uint256;
     using SafeMath for uint256;
     using SafeMathExt for uint256;
@@ -19,19 +18,21 @@ contract MCBCrowdsale is Ownable {
 
     address public constant MCB_TOKEN_ADDRESS = 0x4e352cF164E64ADCBad318C3a1e222E9EBa4Ce42;
     address public constant USDC_TOKEN_ADDRESS = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address public constant MCDEX_FOUNDATION_ADDRESS = 0x0000000000000000000000000000000000000000;
+    address public constant MCDEX_FOUNDATION_ADDRESS = 0x38ca50c6E3391A5bf73c2504bd9Cd9c0b9D89053;
 
     uint256 public constant MAX_SUPPLY = 100000 * 1e18;
     uint256 public constant USDC_DEPOSIT_RATE = 10 * 1e6;
     uint256 public constant MCB_DEPOSIT_RATE = 4 * 1e18;
+    uint256 public constant EMERGENCY_LOCK_PERIOD = 2 days;
 
     bool public isEmergency;
     uint256 public beginTime;
     uint256 public endTime;
     uint256 public unlockTime;
+    uint256 public emergencyUnlockTime;
 
-    uint256 internal _totalSubscription;
-    mapping(address => uint256) internal _subscriptions;
+    uint256 internal _totalCommitment;
+    mapping(address => uint256) internal _commitments;
     mapping(address => bool) internal _settlementFlags;
 
     event Purchase(uint256 amount, uint256 depositedMCB, uint256 depositUSDC);
@@ -45,7 +46,7 @@ contract MCBCrowdsale is Ownable {
         uint256 beginTime_,
         uint256 endTime_,
         uint256 lockPeriod_
-    ) Ownable() {
+    ) Ownable() ReentrancyGuard() {
         require(beginTime_ <= endTime_, "start time cannot be later than end time");
         require(lockPeriod_ <= 86400 * 7, "lock period too long");
 
@@ -55,18 +56,21 @@ contract MCBCrowdsale is Ownable {
     }
 
     /**
-     * @notice  Turn contract to emergency state. Make emergencySettle / emergencyForwardFunds available.
+     * @notice  Turn contract to emergency state. Make emergencySettle available.
+     *          Only can be called before unlock.
      */
-    function setEmergency() public onlyOwner {
+    function setEmergency() external onlyOwner {
+        require(_blockTimestamp() < unlockTime, "can only set emergency before unlock time");
         require(!isEmergency, "already in emergency state");
         isEmergency = true;
+        emergencyUnlockTime = _blockTimestamp().add(EMERGENCY_LOCK_PERIOD);
         emit SetEmergency();
     }
 
     /**
-     * @notice  A boolean to indicate if currently subscribe interface is available.
+     * @notice  A boolean to indicate if currently commit interface is available.
      */
-    function isSubscribable() public view returns (bool) {
+    function isCommitable() public view returns (bool) {
         uint256 currentTimestamp = _blockTimestamp();
         return currentTimestamp >= beginTime && currentTimestamp < endTime;
     }
@@ -87,48 +91,48 @@ contract MCBCrowdsale is Ownable {
     }
 
     /**
-     * @notice  Total raw amount of users subscribed. This amount may exceed MAX_SUPPLY.
+     * @notice  Total raw amount of users commited. This amount may exceed MAX_SUPPLY.
      */
-    function totalSubscription() public view returns (uint256) {
-        return _totalSubscription;
+    function totalCommitment() external view returns (uint256) {
+        return _totalCommitment;
     }
 
     /**
-     * @notice  Total amount of MCB subscribed by user. It should not exceed MAX_SUPPLY.
+     * @notice  Total amount of MCB commited by user. It should not exceed MAX_SUPPLY.
      */
-    function totalSubscribedSupply() public view returns (uint256) {
-        return _totalSubscription.min(MAX_SUPPLY);
+    function totalCommitedSupply() public view returns (uint256) {
+        return _totalCommitment.min(MAX_SUPPLY);
     }
 
     /**
      * @notice  The percentage of token sold and total supply.
      */
-    function subscriptionRate() public view returns (uint256) {
-        return _totalSubscription <= MAX_SUPPLY ? 1e18 : _totalSubscription.wdivFloor(MAX_SUPPLY);
+    function commitmentRate() public view returns (uint256) {
+        return _totalCommitment <= MAX_SUPPLY ? 1e18 : _totalCommitment.wdivFloor(MAX_SUPPLY);
     }
 
     /**
-     * @notice  The raw amount of an account subscribed.
+     * @notice  The raw amount of an account commited.
      */
-    function subscriptionOf(address account) public view returns (uint256) {
-        return _subscriptions[account];
+    function commitmentOf(address account) external view returns (uint256) {
+        return _commitments[account];
     }
 
     /**
-     * @notice  The share of amount in total subscription amount for an account.
+     * @notice  The share of amount in total commited amount for an account.
      */
-    function shareOf(address account) public view returns (uint256) {
-        return _subscriptions[account].wdivFloor(subscriptionRate());
+    function shareOf(address account) external view returns (uint256) {
+        return _commitments[account].wdivFloor(commitmentRate());
     }
 
     /**
-     * @notice  User is able to subscribe 1 MCB token with 4x MCB and 10x USDC.
+     * @notice  User is able to commit 1 MCB token with 4x MCB and 10x USDC.
      *          All MCB deposited and refund USDC (if any) will be sent back to user
      *          after an unlock period.
      */
-    function subscribe(uint256 amount) public {
-        require(!isEmergency, "subscribe is not available in emergency state");
-        require(isSubscribable(), "subscribe is not active now");
+    function commit(uint256 amount) external {
+        require(!isEmergency, "commit is not available in emergency state");
+        require(isCommitable(), "commit is not active now");
         require(amount > 0, "amount to buy cannot be zero");
 
         uint256 depositMCB = amount.wmul(MCB_DEPOSIT_RATE);
@@ -137,8 +141,8 @@ contract MCBCrowdsale is Ownable {
         _mcbToken().safeTransferFrom(msg.sender, address(this), depositMCB);
         _usdcToken().safeTransferFrom(msg.sender, address(this), depositUSDC);
 
-        _subscriptions[msg.sender] = _subscriptions[msg.sender].add(amount);
-        _totalSubscription = _totalSubscription.add(amount);
+        _commitments[msg.sender] = _commitments[msg.sender].add(amount);
+        _totalCommitment = _totalCommitment.add(amount);
 
         emit Purchase(amount, depositMCB, depositUSDC);
     }
@@ -148,23 +152,22 @@ contract MCBCrowdsale is Ownable {
      *
      * @param   account The address to settle, to which the refund and deposited MCB will be transferred.
      */
-    function settle(address account) public {
-        require(!isEmergency, "settle is not available in emergency state");
+    function settle(address account) external nonReentrant {
         require(isSettleable(), "settle is not active now");
         require(!isAccountSettled(account), "account has alreay settled");
 
-        uint256 settledAmount = _subscriptions[account].wdivFloor(subscriptionRate());
-        uint256 depositMCB = _subscriptions[account].wmul(MCB_DEPOSIT_RATE);
-        uint256 depositUSDC = _subscriptions[account].wmul(USDC_DEPOSIT_RATE);
-        uint256 costUSDC = depositUSDC.wdivCeil(subscriptionRate());
+        uint256 settledAmount = _commitments[account].wdivFloor(commitmentRate());
+        uint256 depositMCB = _commitments[account].wmul(MCB_DEPOSIT_RATE);
+        uint256 depositUSDC = _commitments[account].wmul(USDC_DEPOSIT_RATE);
+        uint256 costUSDC = depositUSDC.wdivCeil(commitmentRate());
         uint256 refundUSDC = 0;
         // usdc refund
+        _settlementFlags[account] = true;
         if (depositUSDC > costUSDC) {
             refundUSDC = depositUSDC.sub(costUSDC);
             _usdcToken().safeTransfer(account, refundUSDC);
         }
         _mcbToken().safeTransfer(account, depositMCB);
-        _settlementFlags[account] = true;
 
         emit Settle(account, settledAmount, refundUSDC);
     }
@@ -172,14 +175,17 @@ contract MCBCrowdsale is Ownable {
     /**
      * @notice  Forword funds up to sale target to a preset address.
      */
-    function forwardFunds() public {
-        require(!isEmergency, "forward is not available in emergency state");
+    function forwardFunds() external nonReentrant onlyOwner {
         require(isSettleable(), "forward is not active now");
+        require(
+            _blockTimestamp() >= emergencyUnlockTime,
+            "time has not yet passed the emergency lock time"
+        );
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
 
-        uint256 fundUSDC = totalSubscribedSupply().wmul(USDC_DEPOSIT_RATE);
-        _usdcToken().safeTransfer(_mcdexFoundation(), fundUSDC);
         _settlementFlags[address(this)] = true;
+        uint256 fundUSDC = totalCommitedSupply().wmul(USDC_DEPOSIT_RATE);
+        _usdcToken().safeTransfer(_mcdexFoundation(), fundUSDC);
 
         emit ForwardFunds(fundUSDC);
     }
@@ -189,33 +195,21 @@ contract MCBCrowdsale is Ownable {
      *
      * @param   account The address to settle, to which the deposited assets will be transferred.
      */
-    function emergencySettle(address account) public {
+    function emergencySettle(address account) external nonReentrant {
         require(isEmergency, "emergency settle is only available in emergency state");
         require(!isAccountSettled(account), "account has alreay settled");
 
-        uint256 depositedMCB = _subscriptions[account].wmul(MCB_DEPOSIT_RATE);
-        uint256 depositedUSDC = _subscriptions[account].wmul(USDC_DEPOSIT_RATE);
+        uint256 depositedMCB = _commitments[account].wmul(MCB_DEPOSIT_RATE);
+        uint256 depositedUSDC = _commitments[account].wmul(USDC_DEPOSIT_RATE);
 
-        _subscriptions[account] = 0;
-        _mcbToken().safeTransfer(account, depositedMCB);
-        _usdcToken().safeTransfer(account, depositedUSDC);
+        _totalCommitment = _totalCommitment.sub(_commitments[account]);
+        _commitments[account] = 0;
         _settlementFlags[account] = true;
 
+        _mcbToken().safeTransfer(account, depositedMCB);
+        _usdcToken().safeTransfer(account, depositedUSDC);
+
         emit EmergencySettle(account, depositedMCB, depositedUSDC);
-    }
-
-    /**
-     * @notice  In emergency state, all funds can be forward to target address to prevent further loss.
-     */
-    function emergencyForwardFunds() public onlyOwner {
-        require(isEmergency, "emergency forward is only available in emergency state");
-
-        uint256 totalDepositedMCB = _mcbToken().balanceOf(address(this));
-        uint256 totalDepositedUSDC = _usdcToken().balanceOf(address(this));
-        _mcbToken().safeTransfer(_mcdexFoundation(), totalDepositedMCB);
-        _usdcToken().safeTransfer(_mcdexFoundation(), totalDepositedUSDC);
-
-        emit EmergencyForwardFunds(totalDepositedMCB, totalDepositedUSDC);
     }
 
     function _mcbToken() internal view virtual returns (IERC20) {
