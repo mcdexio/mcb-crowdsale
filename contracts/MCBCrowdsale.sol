@@ -18,7 +18,7 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
 
     address public constant MCB_TOKEN_ADDRESS = 0x4e352cF164E64ADCBad318C3a1e222E9EBa4Ce42;
     address public constant USDC_TOKEN_ADDRESS = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address public constant MCDEX_FOUNDATION_ADDRESS = 0x0000000000000000000000000000000000000000;
+    address public constant MCDEX_FOUNDATION_ADDRESS = 0x38ca50c6E3391A5bf73c2504bd9Cd9c0b9D89053;
 
     uint256 public constant MAX_SUPPLY = 100000 * 1e18;
     uint256 public constant USDC_DEPOSIT_RATE = 10 * 1e6;
@@ -148,7 +148,6 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
      * @param   account The address to settle, to which the refund and deposited MCB will be transferred.
      */
     function settle(address account) external nonReentrant {
-        require(!isEmergency, "settle is not available in emergency state");
         require(isSettleable(), "settle is not active now");
         require(!isAccountSettled(account), "account has alreay settled");
 
@@ -171,8 +170,7 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
     /**
      * @notice  Forword funds up to sale target to a preset address.
      */
-    function forwardFunds() external nonReentrant {
-        require(!isEmergency, "forward is not available in emergency state");
+    function forwardFunds() external nonReentrant onlyOwner {
         require(isSettleable(), "forward is not active now");
         require(!isAccountSettled(address(this)), "funds has alreay been forwarded");
 
@@ -195,26 +193,14 @@ contract MCBCrowdsale is Ownable, ReentrancyGuard {
         uint256 depositedMCB = _subscriptions[account].wmul(MCB_DEPOSIT_RATE);
         uint256 depositedUSDC = _subscriptions[account].wmul(USDC_DEPOSIT_RATE);
 
+        _totalSubscription = _totalSubscription.sub(_subscriptions[account]);
         _subscriptions[account] = 0;
         _settlementFlags[account] = true;
+
         _mcbToken().safeTransfer(account, depositedMCB);
         _usdcToken().safeTransfer(account, depositedUSDC);
 
         emit EmergencySettle(account, depositedMCB, depositedUSDC);
-    }
-
-    /**
-     * @notice  In emergency state, all funds can be forward to target address to prevent further loss.
-     */
-    function emergencyForwardFunds() external onlyOwner nonReentrant {
-        require(isEmergency, "emergency forward is only available in emergency state");
-
-        uint256 totalDepositedMCB = _mcbToken().balanceOf(address(this));
-        uint256 totalDepositedUSDC = _usdcToken().balanceOf(address(this));
-        _mcbToken().safeTransfer(_mcdexFoundation(), totalDepositedMCB);
-        _usdcToken().safeTransfer(_mcdexFoundation(), totalDepositedUSDC);
-
-        emit EmergencyForwardFunds(totalDepositedMCB, totalDepositedUSDC);
     }
 
     function _mcbToken() internal view virtual returns (IERC20) {
