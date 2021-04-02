@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "./libraries/SafeMathExt.sol";
-import "hardhat/console.sol";
 
 contract MCBVesting {
     using SafeMath for uint256;
