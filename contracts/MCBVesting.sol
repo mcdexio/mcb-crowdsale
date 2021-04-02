@@ -53,7 +53,7 @@ contract MCBVesting {
     /**
      * @notice  The amount can be claimed for an account.
      */
-    function claimableToken(address account) public view returns (uint256) {
+    function claimableToken(address account) external view returns (uint256) {
         if (_blockTimestamp() < beginTime) {
             return 0;
         }
@@ -69,7 +69,7 @@ contract MCBVesting {
     /**
      * @notice  Claim token.
      */
-    function claim(address account) public {
+    function claim(address account) external {
         require(_blockTimestamp() >= beginTime, "claim is not active now");
 
         IERC20 mcbToken = _mcbToken();
