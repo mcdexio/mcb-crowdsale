@@ -4,10 +4,11 @@ pragma solidity 0.7.4;
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./libraries/SafeMathExt.sol";
 
-contract MCBVesting {
+contract MCBVesting is ReentrancyGuard {
     using SafeMath for uint256;
     using SafeMathExt for uint256;
     using SafeERC20 for IERC20;
@@ -21,6 +22,7 @@ contract MCBVesting {
 
     mapping(address => uint256) public commitments;
     mapping(address => uint256) public claimedCumulativeBalances;
+    mapping(address => uint256) public claimedBalances;
 
     event AddBeneficiaries(address[] beneficiaries, uint256[] amounts);
     event Claim(address indexed account, uint256 amount);
@@ -69,7 +71,7 @@ contract MCBVesting {
     /**
      * @notice  Claim token.
      */
-    function claim(address account) external {
+    function claim(address account) external nonReentrant {
         require(_blockTimestamp() >= beginTime, "claim is not active now");
 
         IERC20 mcbToken = _mcbToken();
@@ -82,6 +84,7 @@ contract MCBVesting {
         mcbToken.safeTransfer(account, claimableAmount);
 
         claimedCumulativeBalances[account] = cumulativeBalance;
+        claimedBalances[account] = claimedBalances[account].add(claimableAmount);
         lastRemainingBalance = mcbToken.balanceOf(address(this));
 
         emit Claim(account, claimableAmount);
