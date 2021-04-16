@@ -44,6 +44,6 @@ npx hardhat coverage
 | --------------------- | ------------------------------------------------------------ |
 | MCB                   | [0x4e352cf164e64adcbad318c3a1e222e9eba4ce42](https://etherscan.io/token/0x4e352cf164e64adcbad318c3a1e222e9eba4ce42) |
 | USDC                  | [0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48](https://etherscan.io/token/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48) |
-| MCDEX MultiSignWallet |                                                              |
+| MCDEX_FOUNDATION_ADDRESS | 0x38ca50c6E3391A5bf73c2504bd9Cd9c0b9D89053                 | 
 
 ## Reference
