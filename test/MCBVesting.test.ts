@@ -107,8 +107,9 @@ describe('MCBVesting', () => {
         expect(await vesting.claimableToken(user3.address)).to.equal(toWei("0"))
         expect(await vesting.claimableToken(user4.address)).to.equal(toWei("2.5"))
 
-        await vesting.claim(user1.address);
+        var tx = await vesting.claim(user1.address);
         await expect(vesting.claim(user1.address)).to.be.revertedWith("no token to claim");
+        console.log((await tx.wait()).gasUsed.toString())
         expect(await mcb.balanceOf(user1.address)).to.equal(toWei("1"))
         expect(await vesting.claimableToken(user1.address)).to.equal(toWei("0"))
         expect(await vesting.claimableToken(user2.address)).to.equal(toWei("1.5"))
@@ -138,7 +139,7 @@ describe('MCBVesting', () => {
         expect(await vesting.claimableToken(user3.address)).to.equal(toWei("0"))
         expect(await vesting.claimableToken(user4.address)).to.equal(toWei("0"))
 
-        await expect(vesting.updateBeneficiary(user4.address, user5.address)).to.be.revertedWith("old beneficiary has no more commitments to claim");
+        await expect(vesting.updateBeneficiary(user4.address, user5.address)).to.be.revertedWith("old beneficiary has no more token to claim");
 
         expect(await vesting.claimableToken(user1.address)).to.equal(toWei("1"))
         expect(await vesting.claimableToken(user2.address)).to.equal(toWei("3"))

@@ -11,7 +11,7 @@ contract TestMCBVesting is MCBVesting {
         address mcbToken_,
         uint256 beginTime_,
         address[] memory beneficiaries_,
-        uint256[] memory amounts_
+        uint96[] memory amounts_
     ) MCBVesting(beginTime_, beneficiaries_, amounts_) {
         _mockMCBToken = mcbToken_;
     }
