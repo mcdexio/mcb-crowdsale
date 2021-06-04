@@ -80,6 +80,10 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         emit UpdateBeneficiary(oldBeneficiary, newBeneficiary);
     }
 
+    function commitments(address beneficiary) public view returns (uint96) {
+        return accounts[beneficiary].commitment;
+    }
+
     function claimedBalances(address beneficiary) public view returns (uint96) {
         return accounts[beneficiary].claimed;
     }
