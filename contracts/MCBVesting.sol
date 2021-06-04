@@ -80,6 +80,10 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         emit UpdateBeneficiary(oldBeneficiary, newBeneficiary);
     }
 
+    function claimedBalances(address beneficiary) public view returns (uint96) {
+        return accounts[beneficiary].claimed;
+    }
+
     /**
      * @notice  The share of commitment amount in total amount. The value will not change during vesting.
      */
