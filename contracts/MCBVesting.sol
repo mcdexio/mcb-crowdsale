@@ -6,12 +6,24 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/cryptography/ECDSA.sol";
 
 contract MCBVesting is ReentrancyGuard, Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
+    string public constant name = "MCBVesting";
     address public constant MCB_TOKEN_ADDRESS = 0x4e352cF164E64ADCBad318C3a1e222E9EBa4Ce42;
+
+    /// @notice The EIP-712 typehash for the contract's domain
+    bytes32 public constant DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
+
+    /// @notice The EIP-712 typehash for the delegation struct used by the contract
+    bytes32 public constant UPDATE_BENEFICIARY_TYPEHASH =
+        keccak256(
+            "UpdateBeneficiary(address oldBeneficiary,address newBeneficiary,uint256 nonce,uint256 expiration)"
+        );
 
     struct TokenBalance {
         uint96 remaining;
@@ -29,6 +41,7 @@ contract MCBVesting is ReentrancyGuard, Ownable {
 
     TokenBalance public tokenBalance;
     mapping(address => VestingAccount) public accounts;
+    mapping(address => uint256) public nonces;
 
     event Claim(address indexed beneficiary, uint96 amount);
     event AddBeneficiaries(address[] beneficiaries, uint96[] amounts);
@@ -60,24 +73,44 @@ contract MCBVesting is ReentrancyGuard, Ownable {
      * @notice  Update beneficiary address and claiming status.
      */
     function updateBeneficiary(address oldBeneficiary, address newBeneficiary) external onlyOwner {
-        require(newBeneficiary != address(0), "new beneficiary is zero address");
-        VestingAccount storage oldAccount = accounts[oldBeneficiary];
-        VestingAccount storage newAccount = accounts[newBeneficiary];
-        require(oldAccount.commitment > 0, "old beneficiary has no commitments");
-        require(newAccount.commitment == 0, "new beneficiary must has no commitments");
-        require(
-            oldAccount.claimed != oldAccount.commitment,
-            "old beneficiary has no more token to claim"
-        );
+        _updateBeneficiary(oldBeneficiary, newBeneficiary);
+    }
 
-        newAccount.commitment = oldAccount.commitment;
-        newAccount.cumulativeRef = oldAccount.cumulativeRef;
-        newAccount.claimed = oldAccount.claimed;
-        oldAccount.commitment = 0;
-        oldAccount.cumulativeRef = 0;
-        oldAccount.claimed = 0;
+    /**
+     * @notice  Update beneficiary address and claiming status for a signed request.
+     */
+    function updateBeneficiaryBySignature(
+        address oldBeneficiary,
+        address newBeneficiary,
+        uint256 nonce,
+        uint256 expiration,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
+        bytes32 domainSeparator =
+            keccak256(
+                abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), _chainId(), address(this))
+            );
+        bytes32 structHash =
+            keccak256(
+                abi.encode(
+                    UPDATE_BENEFICIARY_TYPEHASH,
+                    oldBeneficiary,
+                    newBeneficiary,
+                    nonce,
+                    expiration
+                )
+            );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        address signer = ecrecover(digest, v, r, s);
+        require(signer != address(0), "invalid signature");
+        require(nonce == nonces[signer]++, "invalid nonce");
+        require(block.timestamp <= expiration, "signature expired");
+        require(oldBeneficiary == signer, "signer is not the old beneficiary");
 
-        emit UpdateBeneficiary(oldBeneficiary, newBeneficiary);
+        _updateBeneficiary(oldBeneficiary, newBeneficiary);
+        nonces[signer]++;
     }
 
     function commitments(address beneficiary) public view returns (uint96) {
@@ -106,7 +139,8 @@ contract MCBVesting is ReentrancyGuard, Ownable {
     /**
      * @notice  Claim token.
      */
-    function claim(address beneficiary) external nonReentrant {
+    function claim() external nonReentrant {
+        address beneficiary = msg.sender;
         require(_blockTimestamp() >= beginTime, "claim is not active now");
         (uint96 claimable, uint96 cumulativeReceived) = _claimableToken(beneficiary);
         require(claimable > 0, "no token to claim");
@@ -140,6 +174,27 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         } else {
             claimable = 0;
         }
+    }
+
+    function _updateBeneficiary(address oldBeneficiary, address newBeneficiary) internal {
+        require(newBeneficiary != address(0), "new beneficiary is zero address");
+        VestingAccount storage oldAccount = accounts[oldBeneficiary];
+        VestingAccount storage newAccount = accounts[newBeneficiary];
+        require(oldAccount.commitment > 0, "old beneficiary has no commitments");
+        require(newAccount.commitment == 0, "new beneficiary must has no commitments");
+        require(
+            oldAccount.claimed != oldAccount.commitment,
+            "old beneficiary has no more token to claim"
+        );
+
+        newAccount.commitment = oldAccount.commitment;
+        newAccount.cumulativeRef = oldAccount.cumulativeRef;
+        newAccount.claimed = oldAccount.claimed;
+        oldAccount.commitment = 0;
+        oldAccount.cumulativeRef = 0;
+        oldAccount.claimed = 0;
+
+        emit UpdateBeneficiary(oldBeneficiary, newBeneficiary);
     }
 
     function _mcbBalance() internal view virtual returns (uint96) {
@@ -181,5 +236,13 @@ contract MCBVesting is ReentrancyGuard, Ownable {
 
     function _wdivFloor96(uint256 x, uint256 y) internal pure returns (uint96 z) {
         z = _safe96(x.mul(1e18).div(y), "division overflow");
+    }
+
+    function _chainId() internal pure returns (uint256) {
+        uint256 chainId;
+        assembly {
+            chainId := chainid()
+        }
+        return chainId;
     }
 }
