@@ -55,6 +55,7 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         require(beneficiaries_.length == amounts_.length, "length of parameters are not match");
         beginTime = beginTime_;
 
+        uint96 totalCommitment_;
         for (uint256 i = 0; i < beneficiaries_.length; i++) {
             (address beneficiary, uint96 amount) = (beneficiaries_[i], amounts_[i]);
             require(beneficiary != address(0), "beneficiary cannot be zero address");
@@ -64,8 +65,9 @@ contract MCBVesting is ReentrancyGuard, Ownable {
                 cumulativeRef: 0,
                 claimed: 0
             });
-            totalCommitment = _add96(totalCommitment, _safe96(amount));
+            totalCommitment_ = _add96(totalCommitment, _safe96(amount));
         }
+        totalCommitment = totalCommitment_;
         emit AddBeneficiaries(beneficiaries_, amounts_);
     }
 
@@ -144,12 +146,10 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         require(_blockTimestamp() >= beginTime, "claim is not active now");
         (uint96 claimable, uint96 cumulativeReceived) = _claimableToken(beneficiary);
         require(claimable > 0, "no token to claim");
-        // claim for beneficiary
         VestingAccount storage account = accounts[beneficiary];
         account.claimed = _add96(account.claimed, claimable);
         account.cumulativeRef = cumulativeReceived;
         _mcbToken().safeTransfer(beneficiary, claimable);
-        // udpate received token tokenBalance
         tokenBalance.remaining = _safe96(_mcbBalance());
         tokenBalance.cumulative = cumulativeReceived;
 
