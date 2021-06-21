@@ -105,7 +105,7 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signer = ecrecover(digest, v, r, s);
         require(signer != address(0), "invalid signature");
-        require(nonce == nonces[signer]++, "invalid nonce");
+        require(nonce == nonces[signer], "invalid nonce");
         require(block.timestamp <= expiration, "signature expired");
         require(oldBeneficiary == signer, "signer is not the old beneficiary");
 
