@@ -48,4 +48,8 @@ contract TestMCBVesting is MCBVestingUpgradeable {
     function _blockTimestamp() internal view virtual override returns (uint256) {
         return _mockTimestamp;
     }
+
+    function setClaimed(address account, uint256 amount) external {
+        accounts[account].claimed = _safe96(amount);
+    }
 }
