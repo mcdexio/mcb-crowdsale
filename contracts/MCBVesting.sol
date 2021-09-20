@@ -164,7 +164,7 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         // calc claimable of beneficiary
         VestingAccount storage account = accounts[beneficiary];
         uint96 vested = _wmul96(cumulativeReceived, shareOf(beneficiary));
-        if (vested > account.claimed) {
+        if (vested <= account.claimed) {
             claimable = 0;
             return (claimable, cumulativeReceived);
         }
