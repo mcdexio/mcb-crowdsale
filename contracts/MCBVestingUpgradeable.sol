@@ -158,6 +158,12 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
         emit Claim(beneficiary, claimable);
     }
 
+    function donate(uint256 amount) external {
+        require(tokenBalance.remaining == _mcbBalance(), "unsynced remaining");
+        _mcbToken().safeTransferFrom(address(msg.sender), address(this), amount);
+        tokenBalance.remaining = _safe96(_mcbBalance());
+    }
+
     function _claimableToken(address beneficiary)
         internal
         view
@@ -171,21 +177,9 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
         uint96 vested = _wmul96(cumulativeReceived, shareOf(beneficiary));
         if (vested <= account.claimed) {
             claimable = 0;
-            return (claimable, cumulativeReceived);
-        }
-        uint96 maxUnclaimed = _sub96(account.commitment, account.claimed);
-        if (maxUnclaimed != 0 && cumulativeReceived > account.cumulativeRef) {
-            claimable = _sub96(cumulativeReceived, account.cumulativeRef);
-            claimable = _wmul96(claimable, shareOf(beneficiary));
-            claimable = claimable < maxUnclaimed ? claimable : maxUnclaimed;
         } else {
-            claimable = 0;
+            claimable = _sub96(vested, account.claimed);
         }
-    }
-
-    function fixTotalCommitment() external onlyOwner {
-        require(totalCommitment == 23800000000000000000000, "unexpected total commitment");
-        totalCommitment = 700000000000000000049658;
     }
 
     function _updateBeneficiary(address oldBeneficiary, address newBeneficiary) internal {

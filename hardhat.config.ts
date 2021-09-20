@@ -102,12 +102,12 @@ module.exports = {
         hardhat: {
             // loggingEnabled: true
         },
-	    arb1: {
-      url: `https://arb1.arbitrum.io/rpc`,
-      gasPrice: 5e8,
-      blockGasLimit: "80000000",
-      accounts: [pk],
-    },
+        arb1: {
+            url: `https://arb1.arbitrum.io/rpc`,
+            gasPrice: 2e9,
+            blockGasLimit: "80000000",
+            accounts: [pk],
+        },
         s10: {
             url: "http://server10.jy.mcarlo.com:8747",
             gasPrice: "auto",
@@ -129,9 +129,9 @@ module.exports = {
         cache: "./cache",
         artifacts: "./artifacts"
     },
-      etherscan: {
-    apiKey: etherscanApiKey
-  },
+    etherscan: {
+        apiKey: etherscanApiKey
+    },
     mocha: {
         timeout: 60000
     }
