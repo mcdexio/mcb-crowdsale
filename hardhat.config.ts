@@ -1,8 +1,15 @@
 import { task } from "hardhat/config";
 import "@nomiclabs/hardhat-waffle";
+import "@nomiclabs/hardhat-etherscan";
 import "./misc/typechain-ethers-v5-mcdex"
 import "hardhat-contract-sizer";
 import "solidity-coverage"
+
+
+const pk = process.env["PK"];
+const infuraId = process.env["INFURA_ID"];
+const etherscanApiKey = process.env["ETHERSCAN_API_KEY"];
+
 
 task("accounts", "Prints the list of accounts", async (args, hre) => {
     const accounts = await hre.ethers.getSigners();
@@ -95,6 +102,12 @@ module.exports = {
         hardhat: {
             // loggingEnabled: true
         },
+	    arb1: {
+      url: `https://arb1.arbitrum.io/rpc`,
+      gasPrice: 5e8,
+      blockGasLimit: "80000000",
+      accounts: [pk],
+    },
         s10: {
             url: "http://server10.jy.mcarlo.com:8747",
             gasPrice: "auto",
@@ -116,17 +129,9 @@ module.exports = {
         cache: "./cache",
         artifacts: "./artifacts"
     },
-    contractSizer: {
-        alphaSort: true,
-        runOnCompile: false,
-        disambiguatePaths: false,
-    },
-    abiExporter: {
-        path: './abi',
-        clear: false,
-        flat: true,
-        only: ['PoolCreator', 'LiquidityPool'],
-    },
+      etherscan: {
+    apiKey: etherscanApiKey
+  },
     mocha: {
         timeout: 60000
     }
