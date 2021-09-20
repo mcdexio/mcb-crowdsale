@@ -166,7 +166,7 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         uint96 vested = _wmul96(cumulativeReceived, shareOf(beneficiary));
         if (vested > account.claimed) {
             claimable = 0;
-            return;
+            return (claimable, cumulativeReceived);
         }
         uint96 maxUnclaimed = _sub96(account.commitment, account.claimed);
         if (maxUnclaimed != 0 && cumulativeReceived > account.cumulativeRef) {
@@ -179,6 +179,7 @@ contract MCBVesting is ReentrancyGuard, Ownable {
     }
 
     function fixTotalCommitment() external onlyOwner {
+        require(totalCommitment == 23800000000000000000000, "unexpected total commitment");
         totalCommitment = 700000000000000000049658;
     }
 
