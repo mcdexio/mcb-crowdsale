@@ -31,6 +31,7 @@
     "chai": "^4.2.0",
     "ethereum-waffle": "^3.1.2",
     "ethers": "^5.0.19",
+    "ethers-eip712": "^0.2.0",
     "hardhat": "^2.0.2",
     "hardhat-abi-exporter": "^2.0.6",
     "hardhat-contract-sizer": "^2.0.2",
