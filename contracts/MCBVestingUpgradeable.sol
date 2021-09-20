@@ -69,7 +69,7 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
                 cumulativeRef: 0,
                 claimed: 0
             });
-            totalCommitment_ = _add96(totalCommitment, _safe96(amount));
+            totalCommitment_ = _add96(totalCommitment_, _safe96(amount));
         }
         totalCommitment = totalCommitment_;
         emit AddBeneficiaries(beneficiaries_, amounts_);
