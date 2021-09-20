@@ -174,6 +174,7 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
         // calc claimable of beneficiary
         VestingAccount storage account = accounts[beneficiary];
         uint96 vested = _wmul96(cumulativeReceived, shareOf(beneficiary));
+        vested = vested < account.commitment ? vested : account.commitment;
         if (vested <= account.claimed) {
             claimable = 0;
         } else {
@@ -183,10 +184,6 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
 
     function _updateBeneficiary(address oldBeneficiary, address newBeneficiary) internal {
         require(newBeneficiary != address(0), "new beneficiary is zero address");
-        require(
-            accounts[newBeneficiary].commitment == 0,
-            "new beneficiary must not be the existed beneficiary"
-        );
         VestingAccount storage oldAccount = accounts[oldBeneficiary];
         VestingAccount storage newAccount = accounts[newBeneficiary];
         require(oldAccount.commitment > 0, "old beneficiary has no commitments");

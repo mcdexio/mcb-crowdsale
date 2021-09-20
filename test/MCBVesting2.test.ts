@@ -93,5 +93,10 @@ describe('MCBVesting', () => {
         expect(await vesting.claimableToken(user1.address)).to.equal(toWei("0.6"))
         expect(await vesting.claimableToken(user2.address)).to.equal(toWei("0.6"))
         expect(await vesting.claimableToken(user3.address)).to.equal(toWei("1.0"))
+
+        await mcb.mint(vesting.address, toWei("999"));
+        expect(await vesting.claimableToken(user1.address)).to.equal(toWei("1.8"))
+        expect(await vesting.claimableToken(user2.address)).to.equal(toWei("2.4"))
+        expect(await vesting.claimableToken(user3.address)).to.equal(toWei("4"))
     })
 })
