@@ -150,7 +150,6 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
         require(claimable > 0, "no token to claim");
         VestingAccount storage account = accounts[beneficiary];
         account.claimed = _add96(account.claimed, claimable);
-        account.cumulativeRef = cumulativeReceived;
         _mcbToken().safeTransfer(beneficiary, claimable);
         tokenBalance.remaining = _safe96(_mcbBalance());
         tokenBalance.cumulative = cumulativeReceived;
@@ -184,6 +183,10 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
 
     function _updateBeneficiary(address oldBeneficiary, address newBeneficiary) internal {
         require(newBeneficiary != address(0), "new beneficiary is zero address");
+        require(
+            accounts[newBeneficiary].commitment == 0,
+            "new beneficiary must not be the existed beneficiary"
+        );
         VestingAccount storage oldAccount = accounts[oldBeneficiary];
         VestingAccount storage newAccount = accounts[newBeneficiary];
         require(oldAccount.commitment > 0, "old beneficiary has no commitments");
