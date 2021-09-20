@@ -65,7 +65,7 @@ contract MCBVesting is ReentrancyGuard, Ownable {
                 cumulativeRef: 0,
                 claimed: 0
             });
-            totalCommitment_ = _add96(totalCommitment, _safe96(amount));
+            totalCommitment_ = _add96(totalCommitment_, _safe96(amount));
         }
         totalCommitment = totalCommitment_;
         emit AddBeneficiaries(beneficiaries_, amounts_);
@@ -90,20 +90,18 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         bytes32 r,
         bytes32 s
     ) external {
-        bytes32 domainSeparator =
-            keccak256(
-                abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), _chainId(), address(this))
-            );
-        bytes32 structHash =
-            keccak256(
-                abi.encode(
-                    UPDATE_BENEFICIARY_TYPEHASH,
-                    oldBeneficiary,
-                    newBeneficiary,
-                    nonce,
-                    expiration
-                )
-            );
+        bytes32 domainSeparator = keccak256(
+            abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), _chainId(), address(this))
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(
+                UPDATE_BENEFICIARY_TYPEHASH,
+                oldBeneficiary,
+                newBeneficiary,
+                nonce,
+                expiration
+            )
+        );
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signer = ecrecover(digest, v, r, s);
         require(signer != address(0), "invalid signature");
@@ -152,7 +150,6 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         _mcbToken().safeTransfer(beneficiary, claimable);
         tokenBalance.remaining = _safe96(_mcbBalance());
         tokenBalance.cumulative = cumulativeReceived;
-
         emit Claim(beneficiary, claimable);
     }
 
@@ -166,6 +163,11 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         cumulativeReceived = _add96(tokenBalance.cumulative, incrementalReceived);
         // calc claimable of beneficiary
         VestingAccount storage account = accounts[beneficiary];
+        uint96 vested = _wmul96(cumulativeReceived, shareOf(beneficiary));
+        if (vested > account.claimed) {
+            claimable = 0;
+            return;
+        }
         uint96 maxUnclaimed = _sub96(account.commitment, account.claimed);
         if (maxUnclaimed != 0 && cumulativeReceived > account.cumulativeRef) {
             claimable = _sub96(cumulativeReceived, account.cumulativeRef);
@@ -174,6 +176,10 @@ contract MCBVesting is ReentrancyGuard, Ownable {
         } else {
             claimable = 0;
         }
+    }
+
+    function fixTotalCommitment() external onlyOwner {
+        totalCommitment = 700000000000000000049658;
     }
 
     function _updateBeneficiary(address oldBeneficiary, address newBeneficiary) internal {
