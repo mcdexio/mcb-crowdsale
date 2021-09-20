@@ -157,7 +157,7 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
         emit Claim(beneficiary, claimable);
     }
 
-    function donate(uint256 amount) external {
+    function donate(uint256 amount) external nonReentrant {
         require(tokenBalance.remaining == _mcbBalance(), "unsynced remaining");
         _mcbToken().safeTransferFrom(address(msg.sender), address(this), amount);
         tokenBalance.remaining = _safe96(_mcbBalance());
