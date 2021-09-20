@@ -168,6 +168,11 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
         cumulativeReceived = _add96(tokenBalance.cumulative, incrementalReceived);
         // calc claimable of beneficiary
         VestingAccount storage account = accounts[beneficiary];
+        uint96 vested = _wmul96(cumulativeReceived, shareOf(beneficiary));
+        if (vested > account.claimed) {
+            claimable = 0;
+            return (claimable, cumulativeReceived);
+        }
         uint96 maxUnclaimed = _sub96(account.commitment, account.claimed);
         if (maxUnclaimed != 0 && cumulativeReceived > account.cumulativeRef) {
             claimable = _sub96(cumulativeReceived, account.cumulativeRef);
@@ -176,6 +181,11 @@ contract MCBVestingUpgradeable is Initializable, ReentrancyGuardUpgradeable, Own
         } else {
             claimable = 0;
         }
+    }
+
+    function fixTotalCommitment() external onlyOwner {
+        require(totalCommitment == 23800000000000000000000, "unexpected total commitment");
+        totalCommitment = 700000000000000000049658;
     }
 
     function _updateBeneficiary(address oldBeneficiary, address newBeneficiary) internal {
